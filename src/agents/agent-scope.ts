@@ -15,6 +15,7 @@ import { resolveDefaultAgentWorkspaceDir } from "./workspace.js";
 const log = createSubsystemLogger("agent-scope");
 
 /** Strip null bytes from paths to prevent ENOTDIR errors. */
+// lyc: 移除路径中的空字节
 function stripNullBytes(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\0/g, "");
@@ -68,6 +69,7 @@ export function listAgentIds(cfg: OpenClawConfig): string[] {
   return ids.length > 0 ? ids : [DEFAULT_AGENT_ID];
 }
 
+// lyc: 解析默认agent的id(cfg.agents.list[].default=true), 如果没有配置agent.list则返回DEFAULT_AGENT_ID, 否则如果有多个默认agent, 发出警告并则使用第一个
 export function resolveDefaultAgentId(cfg: OpenClawConfig): string {
   const agents = listAgentEntries(cfg);
   if (agents.length === 0) {
@@ -109,11 +111,13 @@ export function resolveSessionAgentId(params: {
   return resolveSessionAgentIds(params).sessionAgentId;
 }
 
+// lyc: 解析agent条目(cfg.agents.list[].id==agentId)
 function resolveAgentEntry(cfg: OpenClawConfig, agentId: string): AgentEntry | undefined {
   const id = normalizeAgentId(agentId);
   return listAgentEntries(cfg).find((entry) => normalizeAgentId(entry.id) === id);
 }
 
+// lyc: 解析agent配置(cfg.agents.list[].id==agentId)
 export function resolveAgentConfig(
   cfg: OpenClawConfig,
   agentId: string,
@@ -252,6 +256,14 @@ export function resolveEffectiveModelFallbacks(params: {
   return agentFallbacksOverride ?? defaultFallbacks;
 }
 
+
+/* lyc: 解析agent workspace, 
+  (cfg.agents.list[].id==agentId).workspace 或 
+  cfg.agents.defaults.workspace 或 
+  ~/.openclaw/workspace 或 
+  ~/.openclaw/workspace-${env.OPENCLAW_PROFILE} 或 
+  ~/.openclaw/workspace-${agentId}
+  */
 export function resolveAgentWorkspaceDir(cfg: OpenClawConfig, agentId: string) {
   const id = normalizeAgentId(agentId);
   const configured = resolveAgentConfig(cfg, id)?.workspace?.trim();

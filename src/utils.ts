@@ -282,6 +282,7 @@ export function truncateUtf16Safe(input: string, maxLen: number): string {
   return sliceUtf16Safe(input, 0, limit);
 }
 
+// lyc: 解析用户路径, 即将~替换为home地址
 export function resolveUserPath(input: string): string {
   if (!input) {
     return "";
@@ -292,6 +293,7 @@ export function resolveUserPath(input: string): string {
   }
   if (trimmed.startsWith("~")) {
     const expanded = expandHomePrefix(trimmed, {
+      // lyc: 从 OPENCLAW_HOME, HOME, USERPROFILE, os.homedir, process.cwd() 中生成的home地址
       home: resolveRequiredHomeDir(process.env, os.homedir),
       env: process.env,
       homedir: os.homedir,
@@ -301,6 +303,13 @@ export function resolveUserPath(input: string): string {
   return path.resolve(trimmed);
 }
 
+/* lyc:
+  从以下地方获取openclaw的配置目录:
+  如果设置了OPENCLAW_STATE_DIR或CLAWDBOT_STATE_DIR, 则返回其值
+    如果OPENCLAW_STATE_DIR或CLAWDBOT_STATE_DIR不以~或~/或~\开头, 则认为是配置目录直接返回
+    如果OPENCLAW_STATE_DIR或CLAWDBOT_STATE_DIR以~或~/或~\开头, 则从环境变量(OPENCLAW_HOME, HOME, USERPROFILE, os.homedir, process.cwd())中获得值替换~后返回
+  否则从环境变量(OPENCLAW_HOME, HOME, USERPROFILE, os.homedir, process.cwd()) + "/.openclaw" 组成配置目录返回
+*/
 export function resolveConfigDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,

@@ -71,6 +71,7 @@ export function isDangerousHostEnvOverrideVarName(rawKey: string): boolean {
   return HOST_DANGEROUS_OVERRIDE_ENV_KEYS.has(key.toUpperCase());
 }
 
+// lyc: 对执行环境进行消毒, 即去掉不可信的环境变量
 export function sanitizeHostExecEnv(params?: {
   baseEnv?: Record<string, string | undefined>;
   overrides?: Record<string, string> | null;
@@ -86,6 +87,7 @@ export function sanitizeHostExecEnv(params?: {
       continue;
     }
     const key = normalizeEnvVarKey(rawKey, { portable: true });
+    // lyc: 检查环境变量键是否可信, key名称不正规(normalizeEnvVarKey不通过), 或是危险宿主环境变量名称 则跳过
     if (!key || isDangerousHostEnvVarName(key)) {
       continue;
     }

@@ -43,6 +43,7 @@ export type LogTransport = (logObj: LogTransportRecord) => void;
 
 const externalTransports = new Set<LogTransport>();
 
+// lyc: 检查是否需要跳过配置文件验证
 function shouldSkipLoadConfigFallback(argv: string[] = process.argv): boolean {
   const [primary, secondary] = getCommandPathWithRootOptions(argv, 2);
   return primary === "config" && secondary === "validate";
@@ -71,9 +72,15 @@ function canUseSilentVitestFileLogFastPath(envLevel: LogLevel | undefined): bool
 }
 
 function resolveSettings(): ResolvedSettings {
+  // lyc: 从环境变量中解析日志级别
   const envLevel = resolveEnvLogLevelOverride();
   // Test runs default file logs to silent. Skip config reads and fallback load in the
   // common case to avoid pulling heavy config/schema stacks on startup.
+  // lyc: 测试运行时，默认将文件日志设置为静默模式。在常见情况下，跳过配置读取和回退加载，以避免在启动时加载大量的配置/模式堆栈。
+  /* lyc: 
+    检查是否可以使用静默(silent)日志级别快速路径
+    如果可以则返回静默(silent)日志级别, 否则继续加载配置
+  */
   if (canUseSilentVitestFileLogFastPath(envLevel)) {
     return {
       level: "silent",
@@ -82,10 +89,13 @@ function resolveSettings(): ResolvedSettings {
     };
   }
 
+  // lyc: 从相关路径获取配置文件并加载日志配置
   let cfg: OpenClawConfig["logging"] | undefined =
     (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
+  // lyc: 没有找到配置文件并且命令中没有明确指定"config validate", 则尝试从相关路径加载配置
   if (!cfg && !shouldSkipLoadConfigFallback()) {
     try {
+      // lyc: 加载当前目录父目录下config/config.js, 这个config.js导出的类提供了loadConfig方法, 用于自定义加载配置
       const loaded = requireConfig?.("../config/config.js") as
         | {
             loadConfig?: () => OpenClawConfig;
@@ -98,9 +108,13 @@ function resolveSettings(): ResolvedSettings {
   }
   const defaultLevel =
     process.env.VITEST === "true" && process.env.OPENCLAW_TEST_FILE_LOG !== "1" ? "silent" : "info";
+  // lyc: 优先返回cfg.level否则返回defaultLevel
   const fromConfig = normalizeLogLevel(cfg?.level, defaultLevel);
+  // lyc: level的优先级别为envLevel(env.OPENCLAW_LOG_LEVEL) > cfg.level > defaultLevel
   const level = envLevel ?? fromConfig;
+  // lyc: file的优先级别为cfg.file > defaultRollingPathForToday()
   const file = cfg?.file ?? defaultRollingPathForToday();
+  // lyc: maxFileBytes的优先级别为cfg.maxFileBytes > DEFAULT_MAX_LOG_FILE_BYTES
   const maxFileBytes = resolveMaxLogFileBytes(cfg?.maxFileBytes);
   return { level, file, maxFileBytes };
 }
@@ -140,6 +154,7 @@ function buildLogger(settings: ResolvedSettings): TsLogger<LogObj> {
 
   fs.mkdirSync(path.dirname(settings.file), { recursive: true });
   // Clean up stale rolling logs when using a dated log filename.
+  // lyc: 如果是滚动日志文件, 则清理超过24小时的过期滚动日志文件
   if (isRollingPath(settings.file)) {
     pruneOldRollingLogs(path.dirname(settings.file));
   }
@@ -152,7 +167,9 @@ function buildLogger(settings: ResolvedSettings): TsLogger<LogObj> {
       const line = JSON.stringify({ ...logObj, time });
       const payload = `${line}\n`;
       const payloadBytes = Buffer.byteLength(payload, "utf8");
+      // lyc: 计算下一个日志行的字节数
       const nextBytes = currentFileBytes + payloadBytes;
+      // lyc: 如果下一个日志行的字节数超过了最大字节数, 则警告并抑制写入
       if (nextBytes > settings.maxFileBytes) {
         if (!warnedAboutSizeCap) {
           warnedAboutSizeCap = true;
@@ -169,6 +186,7 @@ function buildLogger(settings: ResolvedSettings): TsLogger<LogObj> {
         }
         return;
       }
+      // lyc: 写入日志行
       if (appendLogLine(settings.file, payload)) {
         currentFileBytes = nextBytes;
       }
@@ -208,11 +226,15 @@ function appendLogLine(file: string, line: string): boolean {
 }
 
 export function getLogger(): TsLogger<LogObj> {
+  // lyc: 获取日志配置
   const settings = resolveSettings();
   const cachedLogger = loggingState.cachedLogger as TsLogger<LogObj> | null;
   const cachedSettings = loggingState.cachedSettings as ResolvedSettings | null;
+  // lyc: 如果没有缓存的日志记录器或者缓存的日志配置与当前的日志配置不同(level, file, maxFileBytes)
   if (!cachedLogger || settingsChanged(cachedSettings, settings)) {
+    // lyc: 构建日志记录器并缓存(存入loggingState.cachedLogger)
     loggingState.cachedLogger = buildLogger(settings);
+    // lyc: 缓存日志配置(存入loggingState.cachedSettings)
     loggingState.cachedSettings = settings;
   }
   return loggingState.cachedLogger as TsLogger<LogObj>;
@@ -306,11 +328,13 @@ function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// lyc: 生成默认的滚动日志文件路径，默认值为 "DEFAULT_LOG_DIR/openclaw-YYYY-MM-DD.log"
 function defaultRollingPathForToday(): string {
   const today = formatLocalDate(new Date());
   return path.join(DEFAULT_LOG_DIR, `${LOG_PREFIX}-${today}${LOG_SUFFIX}`);
 }
 
+// lyc: 检查文件是否为滚动日志文件
 function isRollingPath(file: string): boolean {
   const base = path.basename(file);
   return (
@@ -320,6 +344,7 @@ function isRollingPath(file: string): boolean {
   );
 }
 
+// lyc: 清理过期的滚动日志文件
 function pruneOldRollingLogs(dir: string): void {
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -334,6 +359,7 @@ function pruneOldRollingLogs(dir: string): void {
       const fullPath = path.join(dir, entry.name);
       try {
         const stat = fs.statSync(fullPath);
+        // lyc: 如果滚动日志文件的修改时间早于 cutoff, 则删除它, 即超过24小时
         if (stat.mtimeMs < cutoff) {
           fs.rmSync(fullPath, { force: true });
         }

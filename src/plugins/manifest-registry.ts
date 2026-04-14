@@ -103,6 +103,26 @@ function normalizeManifestLabel(raw: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/* lyc:
+candidate: discoverOpenClawPlugins()返回值的candiate属性,即发现的插件={
+        idHint: package.json.name(最后一个反斜线后的名字)+/+package.json.openclaw.extensions[i]只保留文件名 
+                或 extraPath(目录地址)获取路径中最后的名字(即最终目录名)
+        source: extraPath(目录地址)+package.json.openclaw.extensions[i]指定的文件 
+                或 extraPath(目录地址)+index.ts|js|mjs|cjs
+        rootDir: extraPath(目录地址),
+        origin: "config", 也可以是"workspace", "bundeled", "global"
+        workspaceDir: extraPath(目录地址),
+        packageName: package.json.name,
+        packageVersion: package.json..version,
+        packageDescription: package.json.description,
+        packageDir: extraPath(目录地址),
+        packageManifest: package.json.openclaw的配置内容,
+    } 
+manifest: openclaw.plugin.json
+manifestPath: openclaw.plugin.json的路径
+schemaCacheKey: 缓存key, 基于manifestPath和时间
+configSchema: openclaw.plugin.json中的configSchema属性
+*/
 function buildRecord(params: {
   manifest: PluginManifest;
   candidate: PluginCandidate;
@@ -131,6 +151,11 @@ function buildRecord(params: {
   };
 }
 
+/* lyc: 加载plugins的manifest
+  1. discoverOpenClawPlugins: 从params.workspaceDir和params.config.plugins.load.paths[]中搜索插件package.json中openclaw.extensions配置并加载plugins
+  2. 再从discoverOpenClawPlugins加载的每一个插件跟目录(rootDir)下加载openclaw.plugin.json(manifest), 将其记录在records中
+  3. 返回: { plugins: records, discoverOpenClawPlugins.diagnostics };
+ */
 export function loadPluginManifestRegistry(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
@@ -140,7 +165,9 @@ export function loadPluginManifestRegistry(params: {
   diagnostics?: PluginDiagnostic[];
 }): PluginManifestRegistry {
   const config = params.config ?? {};
+  // lyc: 归一化plugins配置
   const normalized = normalizePluginsConfig(config.plugins);
+  // lyc: 构建缓存key, 基于workspaceDir和loadPaths(config.plugins.load.paths[])
   const cacheKey = buildCacheKey({ workspaceDir: params.workspaceDir, plugins: normalized });
   const env = params.env ?? process.env;
   const cacheEnabled = params.cache !== false && shouldUseManifestCache(env);
@@ -151,6 +178,7 @@ export function loadPluginManifestRegistry(params: {
     }
   }
 
+  // lyc: 发现plugins, 在workspaceDir和extraPaths=loadPaths(config.plugins.load.paths[])中搜索
   const discovery = params.candidates
     ? {
         candidates: params.candidates,
@@ -166,8 +194,10 @@ export function loadPluginManifestRegistry(params: {
   const seenIds = new Map<string, SeenIdEntry>();
   const realpathCache = new Map<string, string>();
 
+  /* lyc: 加载已发现的plugins的manifest*/
   for (const candidate of candidates) {
     const rejectHardlinks = candidate.origin !== "bundled";
+    // lyc: 加载当前发现的plugin(candidate)的manifest(candidate.rootDir/openclaw.plugin.json)
     const manifestRes = loadPluginManifest(candidate.rootDir, rejectHardlinks);
     if (!manifestRes.ok) {
       diagnostics.push({
@@ -178,7 +208,7 @@ export function loadPluginManifestRegistry(params: {
       continue;
     }
     const manifest = manifestRes.manifest;
-
+    // lyc: 当前发现的plugin(candidate)的idHint与当前plugin的manifest.id不一致, 仅添加诊断信息(diagnostics)
     if (candidate.idHint && candidate.idHint !== manifest.id) {
       diagnostics.push({
         level: "warn",
@@ -189,6 +219,7 @@ export function loadPluginManifestRegistry(params: {
     }
 
     const configSchema = manifest.configSchema;
+    // lyc: 构建缓存key, 基于manifestPath和mtimeMs
     const schemaCacheKey = (() => {
       if (!configSchema) {
         return undefined;
@@ -199,24 +230,37 @@ export function loadPluginManifestRegistry(params: {
         : manifestRes.manifestPath;
     })();
 
+    // lyc: 是否处理过当前manifest
     const existing = seenIds.get(manifest.id);
     if (existing) {
       // Check whether both candidates point to the same physical directory
       // (e.g. via symlinks or different path representations). If so, this
       // is a false-positive duplicate and can be silently skipped.
+      // lyc:  检查两个候选路径是否指向同一个物理目录（例如，通过符号链接或不同的路径表示形式）。如果是，则这是一个误报的重复项，可以静默跳过。
+      // lyc: 之前处理过的plugin(existing.candidate)的rootDir与当前发现的plugin(candidate)的rootDir一致
       const samePath = existing.candidate.rootDir === candidate.rootDir;
+      /* lyc: 是否是同一个plugin
+        之前处理过的plugin(existing.candidate)的rootDir与当前发现的plugin(candidate)的rootDir一致
+        或它们的真实路径一致, 则认为是一个plugin
+      */
       const samePlugin = (() => {
         if (samePath) {
           return true;
         }
+        // lyc: 之前处理过的plugin(existing.candidate)的rootDir的绝对路径
         const existingReal = safeRealpathSync(existing.candidate.rootDir, realpathCache);
+        // lyc: 当前发现的plugin(candidate)的rootDir的绝对路径
         const candidateReal = safeRealpathSync(candidate.rootDir, realpathCache);
         return Boolean(existingReal && candidateReal && existingReal === candidateReal);
       })();
+      // lyc: 当前plugin和之前处理过的plugin(existing.candidate)是同一个plugin
       if (samePlugin) {
         // Prefer higher-precedence origins even if candidates are passed in
         // an unexpected order (config > workspace > global > bundled).
+        // lyc: 即使候选项以非预期的顺序传递，也优先选择优先级更高的来源（配置文件 > 工作区 > 全局 > 捆绑）。
+        // 当前plugin的origin优先级比之前处理过的plugin(existing.candidate)的origin优先级高
         if (PLUGIN_ORIGIN_RANK[candidate.origin] < PLUGIN_ORIGIN_RANK[existing.candidate.origin]) {
+          // lyc: records更新当前plugin的manifest
           records[existing.recordIndex] = buildRecord({
             manifest,
             candidate,
@@ -224,10 +268,12 @@ export function loadPluginManifestRegistry(params: {
             schemaCacheKey,
             configSchema,
           });
+          // lyc: seenIds更新当前manifest
           seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
         }
         continue;
       }
+      // lyc: id一样但不是同一个plugin manifest, 仅添加诊断信息(diagnostics)
       diagnostics.push({
         level: "warn",
         pluginId: manifest.id,
@@ -235,9 +281,11 @@ export function loadPluginManifestRegistry(params: {
         message: `duplicate plugin id detected; later plugin may be overridden (${candidate.source})`,
       });
     } else {
+      // lyc: 第一次处理当前manifest, recordIndex记录了当前manifest在records中的索引
       seenIds.set(manifest.id, { candidate, recordIndex: records.length });
     }
 
+    // lyc: records添加当前manifest
     records.push(
       buildRecord({
         manifest,

@@ -41,11 +41,13 @@ function mergeObjectArraysById(
   }
 
   for (const patchEntry of patch) {
+    // lyc: patchEntry不是简单对象或是简单对象但没有id属性, 追加到merged
     if (!isObjectWithStringId(patchEntry)) {
       merged.push(structuredClone(patchEntry));
       continue;
     }
 
+    // lyc: patchEntry有id属性, 但merged中没有该id的entry, 追加到merged
     const existingIndex = indexById.get(patchEntry.id);
     if (existingIndex === undefined) {
       merged.push(structuredClone(patchEntry));
@@ -53,12 +55,14 @@ function mergeObjectArraysById(
       continue;
     }
 
+    // lyc: patchEntry有id属性, merged中也有该id的entry, 合并patchEntry到merged[existingIndex]
     merged[existingIndex] = applyMergePatch(merged[existingIndex], patchEntry, options);
   }
 
   return merged;
 }
 
+// lyc: 应用合并补丁, 用patch删除,覆盖,合并base相关属性
 export function applyMergePatch(
   base: unknown,
   patch: unknown,

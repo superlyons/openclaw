@@ -46,6 +46,7 @@ function isLegacyGatewayBindHostAlias(value: unknown): boolean {
   );
 }
 
+// lyc: 遗留配置规则, path查找配置文件的路径, message找到后的消息, match通过path找到后执行的匹配操作, requireSourceLiteral是否需要源配置文件字面值
 export const LEGACY_CONFIG_RULES: LegacyConfigRule[] = [
   {
     path: ["whatsapp"],

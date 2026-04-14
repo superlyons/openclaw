@@ -13,6 +13,11 @@ export interface BackupMaintenanceFs extends BackupRotationFs {
   copyFile: (from: string, to: string) => Promise<void>;
 }
 
+/* lyc: 轮换配置备份, 删除最旧的备份, 重命名旧的备份
+c.bak, c.bak.1, c.bak.2, c.bak.3, c.bak.4
+删除最旧的备份c.bak.4
+重命名旧的备份c.bak.3->c.bak.4, c.bak.2->c.bak.3, c.bak.1->c.bak.2, c.bak->c.bak.1
+*/
 export async function rotateConfigBackups(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -41,6 +46,7 @@ export async function rotateConfigBackups(
  * (e.g. Windows, some NFS mounts), so we explicitly chmod each backup
  * to owner-only (0o600) to match the main config file.
  */
+// lyc: 600权限代表文件所有者可以读写(r=4, w=2, x=1)
 export async function hardenBackupPermissions(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -69,6 +75,11 @@ export async function hardenBackupPermissions(
  * Only files matching `<configBasename>.bak.*` are considered; the primary
  * `.bak` and numbered `.bak.1` through `.bak.{N-1}` are preserved.
  */
+/* lyc:
+删除不属于受管理轮转周期的孤立 .bak 文件。
+这些文件可能是由于写入中断、手动复制或带有PID戳记的备份（例如openclaw.json.bak.1772352289、openclaw.json.bak.before-marketing）而累积的。
+仅考虑与 `<configBasename>.bak.*` 匹配的文件；主要的 `.bak` 文件以及编号为 `.bak.1` 至 `.bak.{N-1}` 的文件将被保留。
+*/
 export async function cleanOrphanBackups(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -112,6 +123,8 @@ export async function cleanOrphanBackups(
  * Run the full backup maintenance cycle around config writes.
  * Order matters: rotate ring -> create new .bak -> harden modes -> prune orphan .bak.* files.
  */
+// lyc: 围绕配置写入执行完整的备份维护周期。顺序很重要：轮换配置备份 -> 创建新的 .bak -> 硬化模式 -> 删除孤立的 .bak.* 文件。
+// lyc: 维护配置备份
 export async function maintainConfigBackups(
   configPath: string,
   ioFs: BackupMaintenanceFs,

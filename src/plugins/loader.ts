@@ -45,6 +45,7 @@ const registryCache = new Map<string, PluginRegistry>();
 
 const defaultLogger = () => createSubsystemLogger("plugins");
 
+// lyc: 已当前文件地址(import.meta.url)为基准进行查找(src|dist)+/plugin-sdk/+(srcFile|distFile)的真实存在路径, 会向上查找6层目录
 const resolvePluginSdkAliasFile = (params: {
   srcFile: string;
   distFile: string;
@@ -259,11 +260,14 @@ function matchesPathMatcher(matcher: PathMatcher, sourcePath: string): boolean {
   return matcher.dirs.some((dirPath) => isPathInside(dirPath, sourcePath));
 }
 
+// lyc: 构建插件跟踪索引, 一个是config.plugins.load.paths,一个是config.plugins.installs
 function buildProvenanceIndex(params: {
   config: OpenClawConfig;
   normalizedLoadPaths: string[];
 }): PluginProvenanceIndex {
+  // lyc: 创建路径匹配器, exact{}存储文件路径, dir[]存储目录路径
   const loadPathMatcher = createPathMatcher();
+  // lyc: 将loadPath添加到loadPathMatcher中(区分文件路径和目录路径)
   for (const loadPath of params.normalizedLoadPaths) {
     addPathToMatcher(loadPathMatcher, loadPath);
   }
@@ -272,19 +276,24 @@ function buildProvenanceIndex(params: {
   const installs = params.config.plugins?.installs ?? {};
   for (const [pluginId, install] of Object.entries(installs)) {
     const rule: InstallTrackingRule = {
+      // lyc: 是否没有跟踪路径, 
+      // lyc: false代表有跟踪路径matcher属性中有params.config.plugins.installs{installPath,sourcePath},否则true代表matcher属性的内容为空
       trackedWithoutPaths: false,
       matcher: createPathMatcher(),
     };
     const trackedPaths = [install.installPath, install.sourcePath]
       .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
       .filter(Boolean);
+    // lyc: params.config.plugins.installs{}没有配置installPath和sourcePath则代表没有跟踪路径
     if (trackedPaths.length === 0) {
       rule.trackedWithoutPaths = true;
     } else {
+      // lyc: 有跟踪路径
       for (const trackedPath of trackedPaths) {
         addPathToMatcher(rule.matcher, trackedPath);
       }
     }
+    // lyc: params.config.plugins.installs{}中指定的插件及installPath,sourcePath添加到installRules中
     installRules.set(pluginId, rule);
   }
 
@@ -370,9 +379,12 @@ function activatePluginRegistry(registry: PluginRegistry, cacheKey: string): voi
   initializeGlobalHookRunner(registry);
 }
 
+// lyc: 加载插件
 export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegistry {
   // Test env: default-disable plugins unless explicitly configured.
   // This keeps unit/gateway suites fast and avoids loading heavyweight plugin deps by accident.
+  // lyc: 测试环境：除非明确配置，否则默认禁用插件。
+  // lyc: 这使得单元/网关套件保持快速，并避免意外加载重量级的插件依赖。
   const cfg = applyTestPluginDefaults(options.config ?? {}, process.env);
   const logger = options.logger ?? defaultLogger();
   const validateOnly = options.mode === "validate";
@@ -391,19 +403,23 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   }
 
   // Clear previously registered plugin commands before reloading
+  // lyc: 在重新加载之前，清除之前注册的插件命令
   clearPluginCommands();
 
+  // lyc: 创建插件运行时
   const runtime = createPluginRuntime();
+  // lyc: 创建插件注册对象但只获得registry属性和createApi方法
   const { registry, createApi } = createPluginRegistry({
     logger,
     runtime,
     coreGatewayHandlers: options.coreGatewayHandlers as Record<string, GatewayRequestHandler>,
   });
-
+  // lyc: 发现插件
   const discovery = discoverOpenClawPlugins({
     workspaceDir: options.workspaceDir,
     extraPaths: normalized.loadPaths,
   });
+  // lyc: 加载discovery.candidates中的插件的manifest
   const manifestRegistry = loadPluginManifestRegistry({
     config: cfg,
     workspaceDir: options.workspaceDir,
@@ -411,6 +427,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     candidates: discovery.candidates,
     diagnostics: discovery.diagnostics,
   });
+  // lyc: 将发现插件及加载插件manifest时的诊断信息添加到registry.diagnostics中
   pushDiagnostics(registry.diagnostics, manifestRegistry.diagnostics);
   warnWhenAllowlistIsOpen({
     logger,
@@ -427,14 +444,37 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     normalizedLoadPaths: normalized.loadPaths,
   });
 
-  // Lazy: avoid creating the Jiti loader when all plugins are disabled (common in unit tests).
+  // Lazy: avoid creating the Jiti loader when all plugins are disabled (common in unit tests)
+  // lyc: 懒惰模式：当所有插件都禁用时（这在单元测试中很常见），避免创建Jiti加载器。
   let jitiLoader: ReturnType<typeof createJiti> | null = null;
+  /* lyc:
+    /home/run.ts
+      import "openclaw/plugin-sdk"
+      export const version = "1.0"
+      export default function register() {
+          console.log("run.register()")
+      }
+      console.log("run-command")
+    mod = getJiti()("/home/run.ts")
+    运行情况:
+      import "openclaw/plugin-sdk"会执行pluginSdkAlias指定的路径
+      输出run-command
+    mod会包含两个导出version和default
+    mod.version === "1.0"
+    mod.default() 会输出run.register()
+  */
   const getJiti = () => {
     if (jitiLoader) {
       return jitiLoader;
     }
     const pluginSdkAlias = resolvePluginSdkAlias();
     const pluginSdkAccountIdAlias = resolvePluginSdkAccountIdAlias();
+    /* lyc:
+    import.meta.url: 指定当前模块的 URL，作为解析相对路径的基准
+    interopDefault: 直接获取default导出; 这是一个非常重要的兼容性选项。它允许你以 const mod = jiti('./some-esm-module.ts') 的方式直接获取 ESM 模块的 default 导出，而不需要写成 jiti('./some-esm-module.ts').default，使得加载 CommonJS(require) 和 ESM(import) 模块的体验更加一致。
+    extensions: 明确告诉 jiti 需要处理哪些文件扩展名
+    alias: 插件sdk的别名, 即当jiti执行目标程序时, 如果目标程序中引用了openclaw/plugin-sdk, 则会定向到pluginSdkAlias指定的路径
+    */
     jitiLoader = createJiti(import.meta.url, {
       interopDefault: true,
       extensions: [".ts", ".tsx", ".mts", ".cts", ".mtsx", ".ctsx", ".js", ".mjs", ".cjs", ".json"],
@@ -451,7 +491,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     });
     return jitiLoader;
   };
-
+  // lyc: 插件manifest的rootDir映射
   const manifestByRoot = new Map(
     manifestRegistry.plugins.map((record) => [record.rootDir, record]),
   );
@@ -485,14 +525,16 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       registry.plugins.push(record);
       continue;
     }
-
+    // lyc: 当前插件是否启用
     const enableState = resolveEffectiveEnableState({
       id: pluginId,
       origin: candidate.origin,
       config: normalized,
       rootConfig: cfg,
     });
+    // lyc: 当前插件在cfg.plugins.entries[pluginId]的配置
     const entry = normalized.entries[pluginId];
+    // lyc: 构造插件记录(PluginRecord), 根据discovery.candidates[i], manifest构建
     const record = createPluginRecord({
       id: pluginId,
       name: manifestRecord.name ?? pluginId,
@@ -507,6 +549,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     record.kind = manifestRecord.kind;
     record.configUiHints = manifestRecord.configUiHints;
     record.configJsonSchema = manifestRecord.configSchema;
+    // lyc: 向插件记录添加错误信息, 并添加到registry.plugins, registry.diagnostics和seenIds中
     const pushPluginLoadError = (message: string) => {
       record.status = "error";
       record.error = message;
@@ -519,7 +562,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         message: record.error,
       });
     };
-
+    // lyc: 当前插件没有启用, 设置插件记录并添加到registry.plugins和seenIds中, 执行下一个插件(continue)
     if (!enableState.enabled) {
       record.status = "disabled";
       record.error = enableState.reason;
@@ -533,7 +576,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       continue;
     }
 
+    // lyc: 获得插件的根目录地址
     const pluginRoot = safeRealpathOrResolve(candidate.rootDir);
+    // lyc: 打开插件的入口文件
     const opened = openBoundaryFileSync({
       absolutePath: candidate.source,
       rootPath: pluginRoot,
@@ -545,11 +590,19 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       pushPluginLoadError("plugin entry path escapes plugin root or fails alias checks");
       continue;
     }
+    // lyc: 插件的入口文件路径
     const safeSource = opened.path;
     fs.closeSync(opened.fd);
 
     let mod: OpenClawPluginModule | null = null;
     try {
+      /* lyc: 加载插件的入口文件, 如果加载失败, 则记录错误信息, 并执行下一个插件(continue)\
+      这里定义mod=入口文件会导出OpenClawPluginModule联合类型(OpenClawPluginDefinition或Function)
+        这个定义只是在编译期的检查类型, 实际运行时mod可能不符合这个类型, 例如:
+          safeSource的文件内容: export default function register() {...}
+          此时mod={default: safeSource.register}, 这个类型显然不符合OpenClawPluginModule类型要求, 但不会报错因为运行期是js代码,没有类型检查
+        因此后续需要resolvePluginModuleExport(mod)来统一处理这个问题
+      */
       mod = getJiti()(safeSource) as OpenClawPluginModule;
     } catch (err) {
       recordPluginError({
@@ -566,10 +619,14 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       continue;
     }
 
+    // lyc: 统一化mod, {register:mod.default|mod.register|mod.activate, definition:mod as OpenClawPluginDefinition|undefined}
     const resolved = resolvePluginModuleExport(mod);
+    // lyc: definition = mod as OpenClawPluginDefinition | undefined
     const definition = resolved.definition;
+    // lyc: register = mod.default | mod.register | mod.activate
     const register = resolved.register;
 
+    // lyc: 插件代码中的id是否与manifest的id一致
     if (definition?.id && definition.id !== record.id) {
       registry.diagnostics.push({
         level: "warn",
@@ -584,6 +641,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     record.version = definition?.version ?? record.version;
     const manifestKind = record.kind as string | undefined;
     const exportKind = definition?.kind as string | undefined;
+    // lyc: 插件代码中的kind是否与manifest的kind一致
     if (manifestKind && exportKind && exportKind !== manifestKind) {
       registry.diagnostics.push({
         level: "warn",
@@ -605,6 +663,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       selectedId: selectedMemoryPluginId,
     });
 
+    // lyc: 没有启用内存slot, 则插件记录的启用为false, 添加到registry.plugins和seenIds中, 执行下一个插件(continue)
     if (!memoryDecision.enabled) {
       record.enabled = false;
       record.status = "disabled";
@@ -618,37 +677,44 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       selectedMemoryPluginId = record.id;
     }
 
+    // lyc: 验证插件的配置, 使用插件的manifest配置中的schemaSchema验证cfg.plugins.entries[pluginId]的配置是否正确
     const validatedConfig = validatePluginConfig({
       schema: manifestRecord.configSchema,
       cacheKey: manifestRecord.schemaCacheKey,
       value: entry?.config,
     });
 
+    // lyc: 插件的配置不正确, 记录错误信息, 并执行下一个插件(continue)
     if (!validatedConfig.ok) {
       logger.error(`[plugins] ${record.id} invalid config: ${validatedConfig.errors?.join(", ")}`);
       pushPluginLoadError(`invalid config: ${validatedConfig.errors?.join(", ")}`);
       continue;
     }
 
+    // lyc: 如果只是验证插件的配置, 则直接添加到registry.plugins和seenIds中, 执行下一个插件(continue)
     if (validateOnly) {
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
       continue;
     }
 
+    // lyc: 插件的入口文件没有导出register/activate函数, 记录错误信息, 并执行下一个插件(continue)
     if (typeof register !== "function") {
       logger.error(`[plugins] ${record.id} missing register/activate export`);
       pushPluginLoadError("plugin export missing register/activate");
       continue;
     }
 
+    // lyc: 创建插件的api
     const api = createApi(record, {
       config: cfg,
       pluginConfig: validatedConfig.value,
     });
 
     try {
+      // lyc: 注册插件, 注意注册的插件执行文件会向registry的channels,tools等属性注册channel,tool等等
       const result = register(api);
+      // lyc: register返回值是否为promise, 代表插件的注册是异步的, 异步注册的执行结果会被忽略, 但仍会注册插件
       if (result && typeof result.then === "function") {
         registry.diagnostics.push({
           level: "warn",

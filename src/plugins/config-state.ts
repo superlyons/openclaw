@@ -63,6 +63,15 @@ const normalizePluginEntries = (entries: unknown): NormalizedPluginsConfig["entr
   return normalized;
 };
 
+/* lyc: 
+  归一化plugins配置
+  enabled(PluginsConfig.enabled): 是否启用plugins, 
+  allow(PluginsConfig.allow[]): 允许的plugins, 
+  deny(PluginsConfig.deny[]): 拒绝的plugins, 
+  loadPaths(PluginsConfig.load.paths[]): 加载plugins的路径,
+  slots(PluginsConfig.slots.memory): 插槽配置,
+  entries(PluginsConfig.entries[]): plugins配置,
+*/
 export const normalizePluginsConfig = (
   config?: OpenClawConfig["plugins"],
 ): NormalizedPluginsConfig => {
@@ -85,6 +94,7 @@ const hasExplicitMemorySlot = (plugins?: OpenClawConfig["plugins"]) =>
 const hasExplicitMemoryEntry = (plugins?: OpenClawConfig["plugins"]) =>
   Boolean(plugins?.entries && Object.prototype.hasOwnProperty.call(plugins.entries, "memory-core"));
 
+// lyc: 是否有明确配置的plugins
 const hasExplicitPluginConfig = (plugins?: OpenClawConfig["plugins"]) => {
   if (!plugins) {
     return false;
@@ -119,7 +129,9 @@ export function applyTestPluginDefaults(
   }
   const plugins = cfg.plugins;
   const explicitConfig = hasExplicitPluginConfig(plugins);
+  // lyc: 如果有明确配置的plugins
   if (explicitConfig) {
+    // lyc: plugins.slots.memory || plugins.entries["memory-core"]
     if (hasExplicitMemorySlot(plugins) || hasExplicitMemoryEntry(plugins)) {
       return cfg;
     }
@@ -162,6 +174,7 @@ export function isTestDefaultMemorySlotDisabled(
   return true;
 }
 
+// lyc: 解决plugins的启用状态
 export function resolveEnableState(
   id: string,
   origin: PluginRecord["origin"],
@@ -176,22 +189,29 @@ export function resolveEnableState(
   if (config.allow.length > 0 && !config.allow.includes(id)) {
     return { enabled: false, reason: "not in allowlist" };
   }
+  // lyc: plugins是开启的 & 没被deny & 是allow的 & 是内存槽
   if (config.slots.memory === id) {
     return { enabled: true };
   }
   const entry = config.entries[id];
+  // lyc: plugins是开启的 & 没被deny & 是allow的 & 不是内存槽 & config.plugins.entries中明确开启
   if (entry?.enabled === true) {
     return { enabled: true };
   }
+  // lyc: 明确关闭
   if (entry?.enabled === false) {
     return { enabled: false, reason: "disabled in config" };
   }
+  // lyc: plugins是开启的 & 没被deny & 是allow的 & 不是内存槽 & config.plugins.entries中没有明确开启 & origin为bundled & 是BUNDLED默认开启的
   if (origin === "bundled" && BUNDLED_ENABLED_BY_DEFAULT.has(id)) {
     return { enabled: true };
   }
+  // lyc: plugins是开启的 & 没被deny & 是allow的 & 不是内存槽 & config.plugins.entries中没有明确开启 & origin为bundled & 不是BUNDLED默认开启的
   if (origin === "bundled") {
     return { enabled: false, reason: "bundled (disabled by default)" };
   }
+
+  // lyc: plugins是开启的 & 没被deny & 是allow的 & 不是内存槽 & config.plugins.entries中没有明确开启 & origin不为bundled
   return { enabled: true };
 }
 
@@ -214,13 +234,16 @@ export function isBundledChannelEnabledByChannelConfig(
   return (entry as Record<string, unknown>).enabled === true;
 }
 
+// lyc: 解决plugins的有效启用状态
 export function resolveEffectiveEnableState(params: {
   id: string;
   origin: PluginRecord["origin"];
   config: NormalizedPluginsConfig;
   rootConfig?: OpenClawConfig;
 }): { enabled: boolean; reason?: string } {
+  // lyc: 检查config.plugins中是否开启
   const base = resolveEnableState(params.id, params.origin, params.config);
+  // lyc: 如果是origin为bundled的原因, 则从config.channels中检查是否启用
   if (
     !base.enabled &&
     base.reason === "bundled (disabled by default)" &&
@@ -231,32 +254,53 @@ export function resolveEffectiveEnableState(params: {
   return base;
 }
 
+/* lyc: 解决plugins的内存槽决策
+  {enabled: true}: 插件的manifest.kind配置不是memory
+  {enabled: true, selected: true}: 
+    插件的manifest.kind配置是memory &
+    (
+      config.plugins.slots.memory=params.id: slot配置明确指定了插件的id
+      或 (没有slot配置 && (未指定selectedId || (指定了selectedId & selectedId是插件的id))
+    )
+*/
 export function resolveMemorySlotDecision(params: {
   id: string;
   kind?: string;
   slot: string | null | undefined;
   selectedId: string | null;
 }): { enabled: boolean; reason?: string; selected?: boolean } {
+  // lyc: 如果插件的manifest.kind配置不是memory
   if (params.kind !== "memory") {
     return { enabled: true };
   }
+  // lyc: 以下代表插件的manifest.kind配置是memory 
+
+  // lyc: config.plugins.slots.memory明确赋值为null
   if (params.slot === null) {
     return { enabled: false, reason: "memory slot disabled" };
   }
+  // lyc: config.plugins.slots.memory明确指定了一个字符串的值
   if (typeof params.slot === "string") {
+    // lyc: config.plugins.slots.memory指定的值是插件的id
     if (params.slot === params.id) {
       return { enabled: true, selected: true };
     }
+    // lyc: config.plugins.slots.memory指定的值不是插件的id
     return {
       enabled: false,
       reason: `memory slot set to "${params.slot}"`,
     };
   }
+
+  // lyc: 以下代表config.plugins.slots.memory没有定义
+
+  // lyc: 指定了selectedId & selectedId不是插件的id
   if (params.selectedId && params.selectedId !== params.id) {
     return {
       enabled: false,
       reason: `memory slot already filled by "${params.selectedId}"`,
     };
   }
+  // lyc: 没有指定selectedId || (指定了selectedId & selectedId是插件的id)
   return { enabled: true, selected: true };
 }

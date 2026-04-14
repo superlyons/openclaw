@@ -5,10 +5,15 @@ import {
 } from "../infra/host-env-security.js";
 import type { OpenClawConfig } from "./types.js";
 
+// lyc: 判断环境变量是否被阻止
 function isBlockedConfigEnvVar(key: string): boolean {
   return isDangerousHostEnvVarName(key) || isDangerousHostEnvOverrideVarName(key);
 }
 
+/* lyc: 
+  收集配置文件中的环境变量(cfg.env)并返回, 包括cfg:OpenClawConfig.env中除了shellEnv以外的所有定义的环境变量, 
+  cfg.env.vars定义的环境变量会提取到根部(返回的记录中), 如果cfg.env.*定义的环境变量和cfg.env.vars定义的环境变量key冲突, 则cfg.env.vars会被cfg.env.*覆盖
+  */
 function collectConfigEnvVarsByTarget(cfg?: OpenClawConfig): Record<string, string> {
   const envConfig = cfg?.env;
   if (!envConfig) {
@@ -66,6 +71,7 @@ export function collectConfigEnvVars(cfg?: OpenClawConfig): Record<string, strin
   return collectConfigRuntimeEnvVars(cfg);
 }
 
+// lyc: 应用配置文件中的环境变量(cfg.env)到process.env, 如果env已存在不覆盖, 只添加
 export function applyConfigEnvVars(
   cfg: OpenClawConfig,
   env: NodeJS.ProcessEnv = process.env,

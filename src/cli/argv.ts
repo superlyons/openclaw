@@ -8,7 +8,7 @@ import {
 const HELP_FLAGS = new Set(["-h", "--help"]);
 const VERSION_FLAGS = new Set(["-V", "--version"]);
 const ROOT_VERSION_ALIAS_FLAG = "-v";
-
+// lyc: 判断命令行参数是否包含帮助标志、版本标志或根版本别名(-v)
 export function hasHelpOrVersion(argv: string[]): boolean {
   return (
     argv.some((arg) => HELP_FLAGS.has(arg) || VERSION_FLAGS.has(arg)) || hasRootVersionAlias(argv)
@@ -36,7 +36,15 @@ export function hasFlag(argv: string[], name: string): boolean {
   return false;
 }
 
+/* lyc: 
+  判断命令行参数是否包含根版本别名(-v)
+  true:  node app.js -v build
+  true:  node app.js --profile test -v
+  false: node app.js -- -v
+  false: node app.js build -v
+  */
 export function hasRootVersionAlias(argv: string[]): boolean {
+  // lyc: 忽略 node 路径和脚本路径
   const args = argv.slice(2);
   let hasAlias = false;
   for (let i = 0; i < args.length; i += 1) {
@@ -44,21 +52,26 @@ export function hasRootVersionAlias(argv: string[]): boolean {
     if (!arg) {
       continue;
     }
+    // lyc: 遇到参数终止符 "--" 就停止解析, "--"代表之后的参数不再解析选项
     if (arg === FLAG_TERMINATOR) {
       break;
     }
-    if (arg === ROOT_VERSION_ALIAS_FLAG) {
+    // lyc: 找到根版本别名(-v)
+    if (arg === ROOT_VERSION_ALIAS_FLAG) { 
       hasAlias = true;
       continue;
     }
+    // lyc: 尝试消费(略过)根选项（如 --profile, --log-level 等）
     const consumed = consumeRootOptionToken(args, i);
     if (consumed > 0) {
       i += consumed - 1;
       continue;
     }
+    // lyc: 遇到其他选项("-"或"--"开头) 但未找到 -v，继续搜索
     if (arg.startsWith("-")) {
       continue;
     }
+    // lyc: 遇到第一个非选项参数（如文件名(file.txt)、命令(build)等）且还没找到 -v 或 终止符 "--"，返回 false
     return false;
   }
   return hasAlias;
@@ -150,6 +163,13 @@ export function getCommandPathWithRootOptions(argv: string[], depth = 2): string
   return getCommandPathInternal(argv, depth, { skipRootOptions: true });
 }
 
+/* lyc: 
+  获取命令(argv)中的路径
+  depth: 路径深度, 从0开始, 2代表返回的path最长为3个
+  opts.skipRootOptions: 是否跳过根选项, true代表跳过根选项, false代表不跳过根选项, 
+      注意内联选项(如 --profile=file.json)会被跳过, 非内联选项(如 --profile file.json)--profile会被跳过
+  例如: node app.js --profile test build -> ["test", "build"]
+  */
 function getCommandPathInternal(
   argv: string[],
   depth: number,
@@ -162,20 +182,34 @@ function getCommandPathInternal(
     if (!arg) {
       continue;
     }
+    // lyc: 遇到参数终止符 "--" 就停止解析, "--"代表之后的参数不再解析选项
     if (arg === "--") {
       break;
     }
+
+    /* lyc: 
+      如果需要跳过根选项，尝试消费(略过)根选项（如 --profile, --log-level 等）
+      --profile file.json: 跳过 --profile 选项，继续搜索, 即i指向 file.json 参数
+      --profile=file.json --log-level: 跳过 --profile=file.json 选项，继续搜索, 即i指向 --log-level 选项
+      */
     if (opts.skipRootOptions) {
       const consumed = consumeRootOptionToken(args, i);
+      /* lyc:
+        根选项(RootOptions) = {--profile, --log-level, --dev, --no-color}
+        consumed == 0代表args[i]不是根选项,继续下面的搜索
+      */
       if (consumed > 0) {
         i += consumed - 1;
         continue;
       }
     }
+    // lyc: 当前选项以"-"或"--"开头 继续搜索
     if (arg.startsWith("-")) {
       continue;
     }
+    // lyc: 遇到第一个非选项参数（如文件名(file.txt)、命令(build)等），添加到路径中
     path.push(arg);
+    // lyc: 如果路径长度(注意0开始)大于等于指定深度, 就停止解析
     if (path.length >= depth) {
       break;
     }

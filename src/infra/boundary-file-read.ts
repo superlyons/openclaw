@@ -64,8 +64,17 @@ export function canUseBoundaryFileOpen(ioFs: typeof fs): boolean {
   );
 }
 
+/* lyc:
+  在安全边界内读取文件
+  params:
+    absolutePath: 要读取的文件的绝对路径
+    rootPath: 根目录（边界），确保文件在此目录内
+    boundaryLabel: 边界标签，用于错误信息
+    rejectHardlinks: 是否拒绝硬链接
+*/
 export function openBoundaryFileSync(params: OpenBoundaryFileSyncParams): BoundaryFileOpenResult {
   const ioFs = params.ioFs ?? fs;
+  // lyc: 解析边界路径
   const resolved = resolveBoundaryFilePathGeneric({
     absolutePath: params.absolutePath,
     resolve: (absolutePath) =>
@@ -89,6 +98,9 @@ export function openBoundaryFileSync(params: OpenBoundaryFileSyncParams): Bounda
   });
 }
 
+/* lyc:
+  在安全边界内读取文件
+*/
 function openBoundaryFileResolved(params: {
   absolutePath: string;
   resolvedPath: string;
@@ -118,6 +130,7 @@ function openBoundaryFileResolved(params: {
   };
 }
 
+// lyc: 完成边界文件读取
 function finalizeBoundaryFileOpen(params: {
   resolved: ResolvedBoundaryFilePath | BoundaryFileOpenResult;
   maxBytes?: number;
@@ -125,9 +138,11 @@ function finalizeBoundaryFileOpen(params: {
   allowedType?: SafeOpenSyncAllowedType;
   ioFs: BoundaryReadFs;
 }): BoundaryFileOpenResult {
+  // lyc: 如果resolved是BoundaryFileOpenResult, 代表已打开文件直接返回
   if ("ok" in params.resolved) {
     return params.resolved;
   }
+  // lyc: 如果resolved是ResolvedBoundaryFilePath, 代表需要打开文件
   return openBoundaryFileResolved({
     absolutePath: params.resolved.absolutePath,
     resolvedPath: params.resolved.resolvedPath,

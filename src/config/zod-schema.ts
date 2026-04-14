@@ -153,6 +153,12 @@ const PluginEntrySchema = z
   })
   .strict();
 
+/* lyc:
+Zod是一个用于TypeScript和JavaScript的运行时类型检查库。它允许开发者定义数据结构的模式（schema），并在运行时验证数据是否符合这些模式。
+.optional: 可选字段
+.strict: 严格模式, 即要求不允许出现schema中未定义的字段
+.superRefine: 自定义验证规则
+*/
 export const OpenClawSchema = z
   .object({
     $schema: z.string().optional(),

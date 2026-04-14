@@ -4,6 +4,7 @@ import type { ChannelId } from "./plugins/types.js";
 
 // Channel docking: add new core channels here (order + meta + aliases), then
 // register the plugin in its extension entrypoint and keep protocol IDs in sync.
+// 通道对接：在此处添加新的核心通道（顺序+元数据+别名），然后在插件的扩展入口点注册该插件，并保持协议ID同步。
 export const CHAT_CHANNEL_ORDER = [
   "telegram",
   "whatsapp",

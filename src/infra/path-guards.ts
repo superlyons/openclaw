@@ -1,6 +1,7 @@
 import path from "node:path";
-
+// lyc: ENOENT 没有这样的文件或目录, ENOTDIR不是一个目录,
 const NOT_FOUND_CODES = new Set(["ENOENT", "ENOTDIR"]);
+// lyc: ELOOP‌：‌符号链接层级过多, EINVAL‌：‌无效参数, ENOTSUP‌：‌不支持的操作
 const SYMLINK_OPEN_CODES = new Set(["ELOOP", "EINVAL", "ENOTSUP"]);
 
 export function normalizeWindowsPathForComparison(input: string): string {
@@ -32,6 +33,7 @@ export function isSymlinkOpenError(value: unknown): boolean {
   return isNodeError(value) && typeof value.code === "string" && SYMLINK_OPEN_CODES.has(value.code);
 }
 
+// lyc: 判断target是否在root内部(防止路径穿越，如 ../../../etc)
 export function isPathInside(root: string, target: string): boolean {
   const resolvedRoot = path.resolve(root);
   const resolvedTarget = path.resolve(target);
@@ -39,10 +41,13 @@ export function isPathInside(root: string, target: string): boolean {
   if (process.platform === "win32") {
     const rootForCompare = normalizeWindowsPathForComparison(resolvedRoot);
     const targetForCompare = normalizeWindowsPathForComparison(resolvedTarget);
+    // lyc: 计算相对路径, rootForCompare 到 targetForCompare的相对路径
     const relative = path.win32.relative(rootForCompare, targetForCompare);
+    // lyc: 如果 relative 为空（同一路径）或者不以 ".." 开头且不是绝对路径，则说明 target 在 root 内部
     return relative === "" || (!relative.startsWith("..") && !path.win32.isAbsolute(relative));
   }
-
+  // lyc: 计算相对路径, resolvedRoot 到 resolvedTarget的相对路径
   const relative = path.relative(resolvedRoot, resolvedTarget);
+  // lyc: 如果相对路径为 空（同一路径）或者 不以..开头并且不是绝对路径, 则返回true代表resolvedTarget在resolvedRoot内部
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }

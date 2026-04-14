@@ -29,6 +29,7 @@ function resolveVersion(): string {
 }
 
 export function createPluginRuntime(): PluginRuntime {
+  // lyc: satisfies用于验证类型兼容性，但不改变变量的实际类型, 即runtime需要满足PluginRuntime类型的约束同时可以自行添加其他属性
   const runtime = {
     version: resolveVersion(),
     config: createRuntimeConfig(),

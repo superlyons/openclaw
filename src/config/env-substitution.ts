@@ -112,6 +112,7 @@ function substituteString(value: string, env: NodeJS.ProcessEnv, configPath: str
   return chunks.join("");
 }
 
+// lyc: 检查字符串是否包含`${VAR_NAME}`环境变量引用, `$${VAR_NAME}`逃逸引用直到找到`${VAR_NAME}`才算包含
 export function containsEnvVarReference(value: string): boolean {
   if (!value.includes("$")) {
     return false;
@@ -165,6 +166,13 @@ function substituteAny(value: unknown, env: NodeJS.ProcessEnv, path: string): un
  * @param env - Environment variables to use for substitution (defaults to process.env)
  * @returns The config object with env vars substituted
  * @throws {MissingEnvVarError} If a referenced env var is not set or empty
+ */
+/* lyc
+ * 解析 配置值 中的`${VAR_NAME}`环境变量引用。
+ * obj: 经过JSON5解析和$include解析后的已解析配置对象
+ * env: 用于替换的环境变量（默认为process.env）
+ * @returns  已替换环境变量的配置对象
+ * @throws {MissingEnvVarError} 如果引用的环境变量未设置或为空
  */
 export function resolveConfigEnvVars(obj: unknown, env: NodeJS.ProcessEnv = process.env): unknown {
   return substituteAny(obj, env, "");

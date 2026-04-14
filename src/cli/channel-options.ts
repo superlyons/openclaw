@@ -7,6 +7,7 @@ import { CHAT_CHANNEL_ORDER } from "../channels/registry.js";
 import { isTruthyEnvValue } from "../infra/env.js";
 import { ensurePluginRegistryLoaded } from "./plugin-registry.js";
 
+// lyc: values 去重
 function dedupe(values: string[]): string[] {
   const seen = new Set<string>();
   const resolved: string[] = [];
@@ -47,10 +48,16 @@ function loadPrecomputedChannelOptions(): string[] | null {
   return null;
 }
 
+/* lyc: 
+  解析 CLI Channel(渠道)选项
+  env.OPENCLAW_EAGER_CHANNEL_OPTIONS ：预加载的渠道选项
+ */
 export function resolveCliChannelOptions(): string[] {
   if (isTruthyEnvValue(process.env.OPENCLAW_EAGER_CHANNEL_OPTIONS)) {
+    // lyc: 列出插件的渠道(Channel Plugin)目录条目并只获取渠道id
     const catalog = listChannelPluginCatalogEntries().map((entry) => entry.id);
     const base = dedupe([...CHAT_CHANNEL_ORDER, ...catalog]);
+    // lyc: 确保插件注册表已加载
     ensurePluginRegistryLoaded();
     const pluginIds = listChannelPlugins().map((plugin) => plugin.id);
     return dedupe([...base, ...pluginIds]);

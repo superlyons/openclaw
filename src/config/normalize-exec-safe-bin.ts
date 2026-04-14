@@ -2,6 +2,7 @@ import { normalizeSafeBinProfileFixtures } from "../infra/exec-safe-bin-policy.j
 import { normalizeTrustedSafeBinDirs } from "../infra/exec-safe-bin-trust.js";
 import type { OpenClawConfig } from "./types.js";
 
+// lyc: 对cfg中有关exec的配置(cfg.tools.exec,cfg.agents.list[].tools.exec)中的safeBinProfiles和safeBinTrustedDirs属性的值进行规范化处理
 export function normalizeExecSafeBinProfilesInConfig(cfg: OpenClawConfig): void {
   const normalizeExec = (exec: unknown) => {
     if (!exec || typeof exec !== "object" || Array.isArray(exec)) {

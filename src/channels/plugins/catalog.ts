@@ -61,8 +61,10 @@ const ENV_CATALOG_PATHS = ["OPENCLAW_PLUGIN_CATALOG_PATHS", "OPENCLAW_MPM_CATALO
 
 type ManifestKey = typeof MANIFEST_KEY;
 
+// lyc: 解析外部插件目录条目, raw是Array(ExternalCatalogEntry)类型
 function parseCatalogEntries(raw: unknown): ExternalCatalogEntry[] {
   if (Array.isArray(raw)) {
+    // lyc: 如果raw是数组, 则过滤出所有ExternalCatalogEntry类型的元素, 注意是多个ExternalCatalogEntry类型的元素不是一个
     return raw.filter((entry): entry is ExternalCatalogEntry => isRecord(entry));
   }
   if (!isRecord(raw)) {
@@ -87,6 +89,8 @@ function splitEnvPaths(value: string): string[] {
     .filter(Boolean);
 }
 
+// lyc: 获得外部插件目录条目地址: 从入参options.catalogPaths获取 或 环境变量OPENCLAW_PLUGIN_CATALOG_PATHS|OPENCLAW_MPM_CATALOG_PATHS 中获取 或 DEFAULT_CATALOG_PATHS 获取
+// 默认为DEFAULT_CATALOG_PATHS: resolveConfigDir函数(home目录/.openclaw/) + {mpm/plugins.json, mpm/catalog.json, plugins/catalog.json}
 function resolveExternalCatalogPaths(options: CatalogOptions): string[] {
   if (options.catalogPaths && options.catalogPaths.length > 0) {
     return options.catalogPaths.map((entry) => entry.trim()).filter(Boolean);
@@ -100,6 +104,7 @@ function resolveExternalCatalogPaths(options: CatalogOptions): string[] {
   return DEFAULT_CATALOG_PATHS;
 }
 
+// lyc: 加载外部插件目录条目
 function loadExternalCatalogEntries(options: CatalogOptions): ExternalCatalogEntry[] {
   const paths = resolveExternalCatalogPaths(options);
   const entries: ExternalCatalogEntry[] = [];
@@ -190,6 +195,7 @@ function resolveInstallInfo(params: {
   };
 }
 
+// lyc: 从packageManifest(来自配置文件)中获取插件配置内容包括: {id: channel.id, meta: channelMeta, install: installInfo} 缺少任意一个, 则返回null
 function buildCatalogEntry(candidate: {
   packageName?: string;
   packageDir?: string;
@@ -256,24 +262,57 @@ export function buildChannelUiCatalog(
   return { entries, order, labels, detailLabels, systemImages, byId };
 }
 
+/* lyc: 
+  列出插件的渠道(Channel Plugin)目录条目
+  resolved = {
+    manifest.channel.id: {
+      插件来自:
+      - 通过discoverOpenClawPlugins发现的插件:
+        - 指定的符合要求的扩展文件, 无package信息(packageManifest 简称manifest)
+        - .../.openclaw/extensions/package.json中openclaw.extensions中配置的符合要求的扩展文件, package信息为package.json.openclaw内容(packageManifest 简称manifest)
+        - .../.openclaw/extensions下符合要求的扩展文件, package信息为package.json.openclaw内容(packageManifest 简称manifest)
+      - 通过外部插件目录条目发现的插件(优先级最低):
+        - 入参options.catalogPaths[]指定的文件
+        - 环境变量OPENCLAW_PLUGIN_CATALOG_PATHS|OPENCLAW_MPM_CATALOG_PATHS中指定的文件
+        - DEFAULT_CATALOG_PATHS: resolveConfigDir函数返回的目录/(mpm/plugins.json | mpm/catalog.json | plugins/catalog.json)
+      从插件的manifest配置信息中获取频道目录条目
+      entry: ChannelPluginCatalogEntry {
+        id: manifest.channel.id
+        meta: ChannelMeta = manifest.channel
+        install?: {
+          npmSpec: manifest.install.npmSpec | package.json.name
+          localPath: manifest.install.localPath | 插件所在目录 | undefined
+          defaultChoice: "npm" | "local"; manifest.install?.defaultChoice | localPath ? "local" : "npm"
+        }
+      }
+      priority: 优先级
+    }
+  , ...}
+ */
 export function listChannelPluginCatalogEntries(
   options: CatalogOptions = {},
 ): ChannelPluginCatalogEntry[] {
+  // lyc: 发现openclaw插件
   const discovery = discoverOpenClawPlugins({ workspaceDir: options.workspaceDir });
   const resolved = new Map<string, { entry: ChannelPluginCatalogEntry; priority: number }>();
-
+  // lyc: discovery.candidates是发现的插件候选列表, 发现插件的目的是为了加载其渠道目录条目ChannelPluginCatalogEntry
   for (const candidate of discovery.candidates) {
+    // lyc: 从配置文件中获取插件配置内容包括: {id: channel.id, meta: channelMeta, install: installInfo}
     const entry = buildCatalogEntry(candidate);
     if (!entry) {
       continue;
     }
+    // lyc: 通过candidate.origin获取插件优先级, 数值越小, 优先级越高, config > workspace > bundled > global
     const priority = ORIGIN_PRIORITY[candidate.origin] ?? 99;
+    // lyc: 是否已被解析过
     const existing = resolved.get(entry.id);
+    // lyc: 如果插件不存在(没有被解析过), 或优先级更高, 则添加插件
     if (!existing || priority < existing.priority) {
       resolved.set(entry.id, { entry, priority });
     }
   }
 
+  // lyc: 加载外部插件目录条目, 外部插件目录条目优先级最低
   const externalEntries = loadExternalCatalogEntries(options)
     .map((entry) => buildExternalCatalogEntry(entry))
     .filter((entry): entry is ChannelPluginCatalogEntry => Boolean(entry));
@@ -282,7 +321,7 @@ export function listChannelPluginCatalogEntries(
       resolved.set(entry.id, { entry, priority: 99 });
     }
   }
-
+  // lyc: 按插件优先级排序
   return Array.from(resolved.values())
     .map(({ entry }) => entry)
     .toSorted((a, b) => {

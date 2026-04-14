@@ -2,6 +2,9 @@ import type { ChildProcess } from "node:child_process";
 import process from "node:process";
 
 export type ChildProcessBridgeOptions = {
+  /* lyc:
+   ?:是typescript的类型注解, 表示可选属性, 标记属性可以存在，也可以不存在; 当属性不存在时，其值为 undefined; 使用该属性的代码需要进行存在性检查
+   */
   signals?: NodeJS.Signals[];
   onSignal?: (signal: NodeJS.Signals) => void;
 };

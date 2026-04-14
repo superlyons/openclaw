@@ -4,7 +4,11 @@ import { resolveConfigPath } from "../config/paths.js";
 import type { OpenClawConfig } from "../config/types.js";
 
 type LoggingConfig = OpenClawConfig["logging"];
-
+/* lyc:
+  读取日志配置
+  如果配置文件不存在, 则返回 undefined
+  如果配置文件存在, 则返回日志配置
+*/
 export function readLoggingConfig(): LoggingConfig | undefined {
   const configPath = resolveConfigPath();
   try {

@@ -42,10 +42,12 @@ export function resolvePluginManifestPath(rootDir: string): string {
   return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
 }
 
+// lyc: 加载plugin manifest
 export function loadPluginManifest(
   rootDir: string,
   rejectHardlinks = true,
 ): PluginManifestLoadResult {
+  // lyc: 解析plugin manifest路径 rootDir/openclaw.plugin.json
   const manifestPath = resolvePluginManifestPath(rootDir);
   const opened = openBoundaryFileSync({
     absolutePath: manifestPath,

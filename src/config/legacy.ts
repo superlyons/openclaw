@@ -13,6 +13,9 @@ function getPathValue(root: Record<string, unknown>, path: string[]): unknown {
   return cursor;
 }
 
+/* lyc:
+  查找遗留配置问题
+*/
 export function findLegacyConfigIssues(raw: unknown, sourceRaw?: unknown): LegacyConfigIssue[] {
   if (!raw || typeof raw !== "object") {
     return [];
@@ -23,16 +26,22 @@ export function findLegacyConfigIssues(raw: unknown, sourceRaw?: unknown): Legac
   const issues: LegacyConfigIssue[] = [];
   for (const rule of LEGACY_CONFIG_RULES) {
     const cursor = getPathValue(root, rule.path);
+    // lyc: 被找到 && (没有提供match || 提供了match并且返回true)
     if (cursor !== undefined && (!rule.match || rule.match(cursor, root))) {
+      // lyc: 如果需要源配置文件(sourceRoot)
       if (rule.requireSourceLiteral) {
+        // lyc: 查找源配置文件的路径值
         const sourceCursor = getPathValue(sourceRoot, rule.path);
+        // lyc: 如果源配置文件中路径值不存在则跳过
         if (sourceCursor === undefined) {
           continue;
         }
+        // lyc: 如果源配置文件中路径值存在但匹配失败则跳过
         if (rule.match && !rule.match(sourceCursor, sourceRoot)) {
           continue;
         }
       }
+      // lyc: 如果不需要源配置文件(sourceRoot)则直接添加问题
       issues.push({ path: rule.path.join("."), message: rule.message });
     }
   }

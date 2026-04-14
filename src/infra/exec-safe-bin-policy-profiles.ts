@@ -269,6 +269,7 @@ export function normalizeSafeBinProfileFixtures(
     return normalized;
   }
   for (const [rawName, fixture] of Object.entries(fixtures)) {
+    // lyc: 对配置字段中的规范化处理, trim+toLowerCase
     const name = normalizeSafeBinProfileName(rawName);
     if (!name) {
       continue;
