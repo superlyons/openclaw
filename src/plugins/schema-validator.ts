@@ -157,6 +157,7 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): JsonSchemaVa
   });
 }
 
+// lyc: 验证json schema值是否符合要求 即用params.schema验证params.value
 export function validateJsonSchemaValue(params: {
   schema: Record<string, unknown>;
   cacheKey: string;

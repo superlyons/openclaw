@@ -5,12 +5,14 @@ export function isPathInside(baseDir: string, targetPath: string): boolean {
   return isBoundaryPathInside(baseDir, targetPath);
 }
 
+// lyc: 安全地获取路径的绝对路径, 并缓存结果, realpathSync为同步方法它会返回解析后的绝对路径
 export function safeRealpathSync(targetPath: string, cache?: Map<string, string>): string | null {
   const cached = cache?.get(targetPath);
   if (cached) {
     return cached;
   }
   try {
+    // lyc: 解析路径为绝对路径, 路径中存在软连接或快捷方式时会返回解析后的绝对路径
     const resolved = fs.realpathSync(targetPath);
     cache?.set(targetPath, resolved);
     return resolved;

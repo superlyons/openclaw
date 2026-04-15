@@ -60,6 +60,8 @@ function normalizeAny(key: string | undefined, value: unknown): unknown {
  * Goal: accept `~/...` consistently across config file + env overrides, while
  * keeping the surface area small and predictable.
  */
+// lyc: 对路径类配置字段中的“~”路径进行规范化处理。
+// lyc: 目标：在配置文件和环境变量覆盖中一致接受`~/...`，同时保持接口面积小且可预测。
 export function normalizeConfigPaths(cfg: OpenClawConfig): OpenClawConfig {
   if (!cfg || typeof cfg !== "object") {
     return cfg;
