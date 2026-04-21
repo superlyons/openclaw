@@ -154,6 +154,10 @@ export function resolveCompatibilityHostVersion(
 // Single source of truth for the current OpenClaw version.
 // - Embedded/bundled builds: injected define or env var.
 // - Dev/npm builds: package.json.
+/* lyc: 当前OpenClaw版本的唯一权威信息来源: 
+  -嵌入式/打包构建：注入定义或环境变量。 
+  -Dev/npm构建：package.json
+*/
 /* lyc: 
   当前 OpenClaw 版本, 优先级如下:
   - 从注入的版本获取 __OPENCLAW_VERSION__

@@ -12,6 +12,7 @@ export type OutputRuntimeEnv = RuntimeEnv & {
   writeJson: (value: unknown, space?: number) => void;
 };
 
+// lyc: 检查是否应该输出运行时日志, 不是测试环境(VITEST!=true)并且 env.OPENCLAW_TEST_RUNTIME_LOG=1, 或者 console.log被模拟时, 才输出日志
 function shouldEmitRuntimeLog(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.VITEST !== "true") {
     return true;
@@ -19,6 +20,12 @@ function shouldEmitRuntimeLog(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.OPENCLAW_TEST_RUNTIME_LOG === "1") {
     return true;
   }
+  /* lyc:
+  双重断言” (Double Assertion) 模式
+  两个类型之间如果差异太大，直接转换会报错。
+  console.log是函数类型, { mock?: unknown } 是对象类型, 两个类型属于差距过大，不能直接转换。
+  先用 as unknown 转到中间类型（万能类型），再转到目标类型(mock)：
+  */
   const maybeMockedLog = console.log as unknown as { mock?: unknown };
   return typeof maybeMockedLog.mock === "object";
 }

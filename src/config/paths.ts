@@ -28,6 +28,7 @@ function resolveDefaultHomeDir(): string {
 }
 
 /** Build a homedir thunk that respects OPENCLAW_HOME for the given env. */
+// lyc: 返回一个函数, 该函数返回当前环境的 home 目录路径, 尊重 OPENCLAW_HOME 环境变量
 function envHomedir(env: NodeJS.ProcessEnv): () => string {
   return () => resolveRequiredHomeDir(env, os.homedir);
 }
@@ -57,15 +58,27 @@ export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir
  * Can be overridden via OPENCLAW_STATE_DIR.
  * Default: ~/.openclaw
  */
+/* lyc:
+用于存储可变数据（会话、日志、缓存）的状态目录。可通过 OPENCLAW_STATE_DIR 进行覆盖。默认路径：~/.openclaw
+  如果环境变量 OPENCLAW_STATE_DIR 存在, 则返回该路径, ~开头会替换为用户home目录或cwd目录
+  不存在:
+    newDir = 用户home目录或cwd目录+"/.openclaw"的目录地址
+    - OPENCLAW_TEST_FAST = 1 则返回 newDir
+    - 如果newDir在文件系统中存在, 则返回 newDir
+    - 如果不存在, 则检查旧版本遗产目录在文件系统中是否存在, 如果存在, 则返回旧版本遗产目录
+    - 如果旧版本遗产目录不存在, 则返回 newDir 作为默认状态目录(注意这里未验证是否真实存在)
+*/
 export function resolveStateDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
 ): string {
+  // lyc: 获得有效的HOME路径
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
   const override = env.OPENCLAW_STATE_DIR?.trim();
   if (override) {
     return resolveUserPath(override, env, effectiveHomedir);
   }
+  // lyc: effectiveHomedir函数返回的路径+"/.openclaw"目录地址
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
     return newDir;
@@ -88,6 +101,9 @@ export function resolveStateDir(
   return newDir;
 }
 
+/* lyc:
+  为input路径解析~用户路径(注意不确保路径是否存在)
+*/
 function resolveUserPath(
   input: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -118,6 +134,14 @@ export function resolveCanonicalConfigPath(
  * Resolve the active config path by preferring existing config candidates
  * before falling back to the canonical path.
  */
+/* lyc:
+  解析默认配置路径:
+  家目录, cwd目录 + env.OPENCLAW_STATE_DIR, CLAWDBOT_STATE_DIR 配置
+  或
+  家目录, cwd目录 + .openclaw, .clawdbot, .moldbot, .moltbot 目录
+  + 
+  OPENCLAW_CONFIG_PATH, CLAWDBOT_CONFIG_PATH, openclaw.json, OPENCLAW_STATE_DIR, CLAWDBOT_STATE_DIR, clawdbot.json, moldbot.json, moltbot.json json文件路径
+*/
 export function resolveConfigPathCandidate(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
@@ -142,6 +166,15 @@ export function resolveConfigPathCandidate(
 /**
  * Active config path (prefers existing config files).
  */
+/* lyc:
+  解析活动配置路径
+  如果环境变量 OPENCLAW_CONFIG_PATH 存在, 则返回该路径, ~开头会替换为用户目录
+  如果环境变量 OPENCLAW_TEST_FAST === 1, 则返回默认配置路径stateDir/openclaw.json
+  依次在[stateDir/openclaw.json, 旧版本遗产目录数组]中查找, 如果存在, 则返回第一个找到的配置文件地址
+  如果不存在&&OPENCLAW_STATE_DIR===1, 则返回默认配置路径stateDir/openclaw.json
+  如果stateDir !== defaultStateDir, 则返回默认配置路径stateDir/openclaw.json
+  否则解析默认配置路径
+*/
 export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   stateDir: string = resolveStateDir(env, envHomedir(env)),
@@ -152,6 +185,8 @@ export function resolveConfigPath(
     return resolveUserPath(override, env, homedir);
   }
   if (env.OPENCLAW_TEST_FAST === "1") {
+    // lyc:如果配置OPENCLAW_TEST_FAST=1, 则直接返回
+    // lyc: stateDir函数返回的路径+"/openclaw.json"文件地址
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const stateOverride = env.OPENCLAW_STATE_DIR?.trim();
@@ -173,6 +208,7 @@ export function resolveConfigPath(
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const defaultStateDir = resolveStateDir(env, homedir);
+  // lyc: 如果 stateDir === defaultStateDir, 
   if (path.resolve(stateDir) === path.resolve(defaultStateDir)) {
     return resolveConfigPathCandidate(env, homedir);
   }
@@ -185,11 +221,16 @@ export const CONFIG_PATH = resolveConfigPathCandidate();
  * Resolve default config path candidates across default locations.
  * Order: explicit config path → state-dir-derived paths → new default.
  */
+/** lyc:
+解析默认位置中的默认配置路径候选项.
+顺序：显式配置路径(OPENCLAW_CONFIG_PATH) → 状态目录派生路径(OPENCLAW_STATE_DIR) → 新默认路径(defaultDirs)。
+*/
 export function resolveDefaultConfigCandidates(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
 ): string[] {
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
+  // lyc: openclaw.json的显式配置路径(OPENCLAW_CONFIG_PATH)
   const explicit = env.OPENCLAW_CONFIG_PATH?.trim();
   if (explicit) {
     return [resolveUserPath(explicit, env, effectiveHomedir)];

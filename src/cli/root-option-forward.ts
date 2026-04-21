@@ -1,5 +1,7 @@
 import { consumeRootOptionToken } from "../infra/cli-root-options.js";
 
+// lyc: 判断args[index]是否为根选项, 如果是则向out数组中添加根选项参数, 返回添加的参数数量
+// lyc: 如果参数不是根选项, 则返回0
 export function forwardConsumedCliRootOption(
   args: readonly string[],
   index: number,

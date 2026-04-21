@@ -50,20 +50,28 @@ function resolveUrlString(input: RequestInfo | URL): string | null {
   return null;
 }
 
+// lyc: 为全局Fetch函数安装调试代理的补丁, 用于向数据库(调试代理捕获存储(DebugProxyCaptureStore))记录http交流信息
 function installDebugProxyGlobalFetchPatch(settings: DebugProxySettings): void {
+  // lyc: 全局必须存在fetch函数, 否则直接返回
   if (typeof globalThis.fetch !== "function") {
     return;
   }
+  // lyc: 检查是否已经安装了补丁, 是则直接返回
   const patched = globalThis as GlobalFetchPatchTarget;
   if (patched[DEBUG_PROXY_FETCH_PATCH_KEY]) {
     return;
   }
+  // lyc: 开始安装补丁
+  // lyc: 保存原始fetch函数引用
   const originalFetch = globalThis.fetch.bind(globalThis);
+  // lyc: 保存原始fetch函数引用到patched对象中
   patched[DEBUG_PROXY_FETCH_PATCH_KEY] = { originalFetch };
+  // lyc: 为全局fetch函数安装调试代理的补丁
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = resolveUrlString(input);
     try {
       const response = await originalFetch(input, init);
+      // lyc: 如果是http,https请求, 则记录http交流信息
       if (url && /^https?:/i.test(url)) {
         captureHttpExchange({
           url,
@@ -93,6 +101,7 @@ function installDebugProxyGlobalFetchPatch(settings: DebugProxySettings): void {
       }
       return response;
     } catch (error) {
+      // lyc: 如果请求发生了错误, 则记录错误事件(capture_events表)
       if (url && /^https?:/i.test(url)) {
         const store = getDebugProxyCaptureStore(settings.dbPath, settings.blobDir);
         const parsed = new URL(url);
@@ -122,6 +131,7 @@ function installDebugProxyGlobalFetchPatch(settings: DebugProxySettings): void {
   }) as typeof globalThis.fetch;
 }
 
+// lyc: 卸载全局Fetch函数的调试代理补丁
 function uninstallDebugProxyGlobalFetchPatch(): void {
   const patched = globalThis as GlobalFetchPatchTarget;
   const state = patched[DEBUG_PROXY_FETCH_PATCH_KEY];
@@ -135,12 +145,14 @@ function uninstallDebugProxyGlobalFetchPatch(): void {
 export function isDebugProxyGlobalFetchPatchInstalled(): boolean {
   return Boolean((globalThis as GlobalFetchPatchTarget)[DEBUG_PROXY_FETCH_PATCH_KEY]);
 }
-
+// lyc: 初始化调试代理捕获, 用于记录http交流信息, 记录在调试代理捕获存储(DebugProxyCaptureStore)中
 export function initializeDebugProxyCapture(mode: string, resolved?: DebugProxySettings): void {
+  // lyc: 解析调试代理设置
   const settings = resolved ?? resolveDebugProxySettings();
   if (!settings.enabled) {
     return;
   }
+  // lyc: 初始化调试代理捕获存储(DebugProxyCaptureStore)并插入或更新会话记录(capture_sessions表)
   getDebugProxyCaptureStore(settings.dbPath, settings.blobDir).upsertSession({
     id: settings.sessionId,
     startedAt: Date.now(),
@@ -151,19 +163,25 @@ export function initializeDebugProxyCapture(mode: string, resolved?: DebugProxyS
     dbPath: settings.dbPath,
     blobDir: settings.blobDir,
   });
+  // lyc: 安装调试代理补丁, 用于向数据库(调试代理捕获存储(DebugProxyCaptureStore))记录http交流信息
   installDebugProxyGlobalFetchPatch(settings);
 }
 
+// lyc: 结束调试代理捕获
 export function finalizeDebugProxyCapture(resolved?: DebugProxySettings): void {
   const settings = resolved ?? resolveDebugProxySettings();
   if (!settings.enabled) {
     return;
   }
+  // lyc: 结束会话记录(capture_sessions表)
   getDebugProxyCaptureStore(settings.dbPath, settings.blobDir).endSession(settings.sessionId);
+  // lyc: 卸载全局Fetch函数的调试代理补丁
   uninstallDebugProxyGlobalFetchPatch();
+  // lyc: 关闭调试代理捕获存储(DebugProxyCaptureStore)
   closeDebugProxyCaptureStore();
 }
 
+// lyc: 记录http交流信息
 export function captureHttpExchange(params: {
   url: string;
   method: string;
@@ -174,10 +192,12 @@ export function captureHttpExchange(params: {
   flowId?: string;
   meta?: Record<string, unknown>;
 }): void {
+  // lyc: 解析调试代理设置
   const settings = resolveDebugProxySettings();
   if (!settings.enabled) {
     return;
   }
+  // lyc: 获取调试代理捕获存储(DebugProxyCaptureStore)
   const store = getDebugProxyCaptureStore(settings.dbPath, settings.blobDir);
   const flowId = params.flowId ?? randomUUID();
   const url = new URL(params.url);
@@ -185,6 +205,7 @@ export function captureHttpExchange(params: {
     typeof params.requestBody === "string" || Buffer.isBuffer(params.requestBody)
       ? params.requestBody
       : null;
+  // lyc: 持久化请求体, 并返回持久化后的记录
   const requestPayload = persistEventPayload(store, {
     data: requestBody,
     contentType:
@@ -192,6 +213,7 @@ export function captureHttpExchange(params: {
         ? (params.requestHeaders.get("content-type") ?? undefined)
         : params.requestHeaders?.["content-type"],
   });
+  // lyc: 记录请求事件(capture_events表)
   store.recordEvent({
     sessionId: settings.sessionId,
     ts: Date.now(),
@@ -216,11 +238,14 @@ export function captureHttpExchange(params: {
     metaJson: safeJsonString(params.meta),
     ...requestPayload,
   });
+  // lyc: 检查是否可以克隆响应体
   const cloneable =
     params.response &&
     typeof params.response.clone === "function" &&
     typeof params.response.arrayBuffer === "function";
+  // lyc: 如果不能克隆响应体, 则记录响应事件(capture_events表)不存储响应体, 之后退出本函数
   if (!cloneable) {
+    // lyc: 记录响应事件(capture_events表)
     store.recordEvent({
       sessionId: settings.sessionId,
       ts: Date.now(),
@@ -246,14 +271,17 @@ export function captureHttpExchange(params: {
     });
     return;
   }
+  // lyc: 如果可以克隆响应体, 则记录响应事件(capture_events表)并存储响应体
   void params.response
     .clone()
     .arrayBuffer()
     .then((buffer) => {
+      // lyc: 持久化响应体, 并返回持久化后的记录
       const responsePayload = persistEventPayload(store, {
         data: Buffer.from(buffer),
         contentType: params.response.headers.get("content-type") ?? undefined,
       });
+      // lyc: 记录响应事件(capture_events表)
       store.recordEvent({
         sessionId: settings.sessionId,
         ts: Date.now(),
@@ -274,6 +302,7 @@ export function captureHttpExchange(params: {
       });
     })
     .catch((error) => {
+      // lyc: 如果克隆响应体失败, 则记录错误事件(capture_events表)
       store.recordEvent({
         sessionId: settings.sessionId,
         ts: Date.now(),

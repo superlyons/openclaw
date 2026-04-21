@@ -23,14 +23,17 @@ function normalizeCommandPathMatchRule(rule: CommandPathMatchRule): NormalizedCo
   return { pattern: rule.pattern, exact: rule.exact ?? false };
 }
 
+// lyc: 匹配commandPath是否与其它入参相符
 export function matchesCommandPath(
   commandPath: string[],
   pattern: readonly string[],
   params?: { exact?: boolean },
 ): boolean {
+  // lyc: 检查commandPath是否与pattern匹配, 只会匹配pattern中包含的命令, 如果不匹配返回false
   if (pattern.some((segment, index) => commandPath[index] !== segment)) {
     return false;
   }
+  // lyc: 如果params.exact为true, 则commandPath的长度必须与pattern的长度相同, 代表必须完全匹配(命令完全相同), 否则返回false
   return !params?.exact || commandPath.length === pattern.length;
 }
 

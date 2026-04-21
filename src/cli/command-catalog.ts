@@ -29,6 +29,7 @@ export type CliCommandCatalogEntry = {
   };
 };
 
+// lyc: CLI命令目录, 包含所有命令的路径, 策略, 路由等信息
 export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   { commandPath: ["agent"], policy: { loadPlugins: "always" } },
   { commandPath: ["message"], policy: { loadPlugins: "always" } },

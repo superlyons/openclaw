@@ -83,6 +83,22 @@ export function buildOfficialChannelCatalog(params = {}) {
   return { entries };
 }
 
+/** lyc:ai
+ * 生成并写入官方频道目录文件
+ * 
+ * 此函数扫描 extensions/ 目录下的所有插件，根据每个插件的 package.json
+ * 中的 openclaw.channel 配置信息，生成官方频道目录。
+ * 只有满足以下条件的插件才会被包含在目录中：
+ * - package.json 包含有效的 name 字段
+ * - package.json.openclaw.channel 存在且有效
+ * - package.json.openclaw.release.publishToNpm 为 true
+ * 
+ * 生成的目录文件 dist/channel-catalog.json 用于插件发现、安装和管理。
+ * 
+ * @param {Object} params - 配置参数对象
+ * @param {string} [params.cwd] - 当前工作目录
+ * @param {string} [params.repoRoot] - 仓库根目录，默认使用 cwd 或 process.cwd()
+ */
 export function writeOfficialChannelCatalog(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
   const outputPath = path.join(repoRoot, OFFICIAL_CHANNEL_CATALOG_RELATIVE_PATH);

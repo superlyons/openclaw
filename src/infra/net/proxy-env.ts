@@ -31,6 +31,15 @@ function normalizeProxyEnvValue(value: string | undefined): string | null | unde
  * - HTTPS requests prefer https_proxy/HTTPS_PROXY, then fall back to http_proxy/HTTP_PROXY
  * - ALL_PROXY is ignored by EnvHttpProxyAgent
  */
+/* lyc: 匹配基于环境的HTTP/S代理选择的EnvHttpProxyAgent语义： 
+  - 小写变量优先于大写变量
+  - HTTPS请求优先使用https_proxy/HTTPS_PROXY，然后回退到http_proxy/HTTP_PROXY
+  - EnvHttpProxyAgent忽略ALL_PROXY
+*/
+/* lyc:
+  从环境变量中解析HTTP/S代理URL(env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY)
+  返回解析后的代理URL, 如果没有配置代理, 则返回undefined
+*/
 export function resolveEnvHttpProxyUrl(
   protocol: "http" | "https",
   env: NodeJS.ProcessEnv = process.env,
@@ -46,7 +55,7 @@ export function resolveEnvHttpProxyUrl(
   }
   return httpProxy ?? undefined;
 }
-
+/* lyc: 检查环境变量中是否配置了HTTP/S代理 (env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY)*/
 export function hasEnvHttpProxyConfigured(
   protocol: "http" | "https" = "https",
   env: NodeJS.ProcessEnv = process.env,

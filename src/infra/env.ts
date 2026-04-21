@@ -46,6 +46,7 @@ export function logAcceptedEnvOption(option: AcceptedEnvOption): void {
   );
 }
 
+// lyc: 规范化 Zai 环境变量（ ZAI_API_KEY = Z_AI_API_KEY ）
 export function normalizeZaiEnv(): void {
   if (!process.env.ZAI_API_KEY?.trim() && process.env.Z_AI_API_KEY?.trim()) {
     process.env.ZAI_API_KEY = process.env.Z_AI_API_KEY;
@@ -67,6 +68,7 @@ export function isTruthyEnvValue(value?: string): boolean {
   }
 }
 
+// lyc: 规范化环境变量（ ZAI_API_KEY = Z_AI_API_KEY ）
 export function normalizeEnv(): void {
   normalizeZaiEnv();
 }

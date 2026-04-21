@@ -81,6 +81,20 @@ export function isRootVersionInvocation(argv: string[]): boolean {
   return isRootInvocationForFlags(argv, VERSION_FLAGS, { includeVersionAlias: true });
 }
 
+/* lyc: 
+检参数是否是targetFlags中指定的针对跟程序的选项, 并且不能包含子命令选项和非根选项(RootOptions)
+  targetFlags={"-h", "--help", "-V", "--version"}
+  options={includeVersionAlias: true} 代表targetFlags添加了根版本别名(-v)
+以下返回true, 参数-h是跟程序app.js的选项
+node app.js --profile -h
+node app.js -h --profile
+以下返回false, 因为有子命令(command1), 
+node app.js command1 -h // 参数-h是command1的选项, 不是跟程序app.js的选项
+node app.js -h command1 // 参数-h是跟程序app.js的选项, 但存在了不允许的子命令选项
+以下返回false, 因为有非根选项(RootOptions), 
+node app.js -h --param1 // 参数-h是跟程序app.js的选项, 但存在了不允许的根选项(RootOptions)
+node app.js --param1 -h // 存在了不允许的根选项(RootOptions)
+*/
 function isRootInvocationForFlags(
   argv: string[],
   targetFlags: Set<string>,
@@ -109,6 +123,8 @@ function isRootInvocationForFlags(
       continue;
     }
     // Unknown flags and subcommand-scoped help/version should fall back to Commander.
+    // lyc: 未知选项和子命令范围的 帮助/版本选项 应该回退到 Commander。
+    // lyc: arg不是"--", 目标选项(targetFlags), 不是根选项(RootOptions), 则返回false
     return false;
   }
   return hasTarget;
@@ -163,13 +179,16 @@ export function getCommandPathWithRootOptions(argv: string[], depth = 2): string
   return getCommandPathInternal(argv, depth, { skipRootOptions: true });
 }
 
-/* lyc: 
+/* lyc:
   获取命令(argv)中的路径
-  depth: 路径深度, 从0开始, 2代表返回的path最长为3个
-  opts.skipRootOptions: 是否跳过根选项, true代表跳过根选项, false代表不跳过根选项, 
-      注意内联选项(如 --profile=file.json)会被跳过, 非内联选项(如 --profile file.json)--profile会被跳过
-  例如: node app.js --profile test build -> ["test", "build"]
-  */
+  depth: 路径深度, 2代表返回的path最长为2个
+  opts.skipRootOptions: 是否跳过根选项(RootOptions), true代表跳过根选项, false代表不跳过根选项, 
+      根选项(RootOptions) = {--dev, --no-color, --profile|--profile=, --log-level|--log-level=, --container|--container=}
+      内联选项(如 --profile=file.json)会被跳过, 非内联选项(如 --profile file.json)也会被跳过(跳到file.json的下一个参数)
+  例如: 
+    node app.js --profile test build -> ["test", "build"]
+    node openclaw run dev --profile 1000 -> ["run", "dev"]
+*/
 function getCommandPathInternal(
   argv: string[],
   depth: number,
@@ -188,28 +207,29 @@ function getCommandPathInternal(
     }
 
     /* lyc: 
-      如果需要跳过根选项，尝试消费(略过)根选项（如 --profile, --log-level 等）
-      --profile file.json: 跳过 --profile 选项，继续搜索, 即i指向 file.json 参数
-      --profile=file.json --log-level: 跳过 --profile=file.json 选项，继续搜索, 即i指向 --log-level 选项
+      如果需要跳过根选项(RootOptions)，尝试消费(略过)根选项(RootOptions)
+      --profile file.json --log-level: 跳过 --profile 选项 和 选项值 file.json，继续搜索, 
+            即 i=i+2-1=i+1 指向 file.json 参数, continue后i++指向 --log-level 选项
+      --profile=file.json --log-level: 跳过 --profile=file.json 选项，继续搜索, 
+            即i=i+1-1=i 指向 --profile=file.json 选项(没有动), continue后i++指向 --log-level 选项
+      --params --log-level: --params不是根选项, 继续执行当前循环内剩下的逻辑
       */
     if (opts.skipRootOptions) {
+      // lyc: 只关注根选项(RootOptions) 其它一律返回0
       const consumed = consumeRootOptionToken(args, i);
-      /* lyc:
-        根选项(RootOptions) = {--profile, --log-level, --dev, --no-color}
-        consumed == 0代表args[i]不是根选项,继续下面的搜索
-      */
+      // lyc: consumed == 0代表args[i]不是根选项,继续下面的搜索
       if (consumed > 0) {
         i += consumed - 1;
         continue;
       }
     }
-    // lyc: 当前选项以"-"或"--"开头 继续搜索
+    // lyc: 当前参数以"-"或"--"开头, 则一定不是命令路径 和 根选项(RootOptions), 而是其它的选项参数
     if (arg.startsWith("-")) {
       continue;
     }
-    // lyc: 遇到第一个非选项参数（如文件名(file.txt)、命令(build)等），添加到路径中
+    // lyc: 一定是命令路径, 则加入路径
     path.push(arg);
-    // lyc: 如果路径长度(注意0开始)大于等于指定深度, 就停止解析
+    // lyc: 达到指定命令路径的深度, 则跳出循环
     if (path.length >= depth) {
       break;
     }
@@ -334,6 +354,8 @@ export function buildParseArgv(params: {
   return ["node", programName || "openclaw", ...normalizedArgv];
 }
 
+// lyc: 判断是否需要迁移状态(根据命令路径) (如从旧版本升级)
+// lyc: health, status, sessions, update status, config get|unset, models list|status, agent 不需要迁移状态
 export function shouldMigrateStateFromPath(path: string[]): boolean {
   if (path.length === 0) {
     return true;

@@ -333,6 +333,12 @@ function resolveConfigWriteSuspiciousReasons(params: {
   return reasons;
 }
 
+/* lyc:ai 
+readConfigHealthState 异步读取配置健康状态文件。
+- 文件路径：~/.openclaw/logs/config-health.json
+- 包含每个配置文件的健康信息（最后已知良好状态、可疑签名等）
+- 如果文件不存在或解析失败，返回空对象（安全默认值）
+*/
 async function readConfigHealthState(deps: Required<ConfigIoDeps>): Promise<ConfigHealthState> {
   try {
     const healthPath = resolveConfigHealthStatePath(deps.env, deps.homedir);
@@ -344,6 +350,10 @@ async function readConfigHealthState(deps: Required<ConfigIoDeps>): Promise<Conf
   }
 }
 
+/* lyc:ai 
+readConfigHealthStateSync 是 readConfigHealthState 的同步版本。
+用于同步代码路径中读取配置健康状态。
+*/
 function readConfigHealthStateSync(deps: Required<ConfigIoDeps>): ConfigHealthState {
   try {
     const healthPath = resolveConfigHealthStatePath(deps.env, deps.homedir);
@@ -355,6 +365,12 @@ function readConfigHealthStateSync(deps: Required<ConfigIoDeps>): ConfigHealthSt
   }
 }
 
+/* lyc:ai 
+writeConfigHealthState 异步写入配置健康状态文件。
+- 创建目录（递归，权限 0o700）
+- 写入格式化的 JSON 文件（权限 0o600）
+- 最佳努力模式：失败时静默忽略（不影响主流程）
+*/
 async function writeConfigHealthState(
   deps: Required<ConfigIoDeps>,
   state: ConfigHealthState,
@@ -371,6 +387,10 @@ async function writeConfigHealthState(
   }
 }
 
+/* lyc:ai 
+writeConfigHealthStateSync 是 writeConfigHealthState 的同步版本。
+用于同步代码路径中写入配置健康状态。
+*/
 function writeConfigHealthStateSync(deps: Required<ConfigIoDeps>, state: ConfigHealthState): void {
   try {
     const healthPath = resolveConfigHealthStatePath(deps.env, deps.homedir);
@@ -423,30 +443,77 @@ function isUpdateChannelOnlyRoot(value: unknown): boolean {
   return updateKeys.length === 1 && typeof update.channel === "string";
 }
 
+/* lyc:ai 
+resolveConfigObserveSuspiciousReasons 函数负责检测配置文件的可疑变化。
+它将当前配置与基线配置（上次已知良好或备份）进行比较，
+识别可能表明配置被意外修改或损坏的模式。
+
+可疑变化检测规则：
+
+1. **文件大小骤减**（size-drop-vs-last-good）
+   - 条件：基线文件大小 >= 512 字节，且当前文件大小 < 基线大小的 50%
+   - 风险：可能被意外截断、覆盖或清空
+
+2. **元数据丢失**（missing-meta-vs-last-good）
+   - 条件：基线包含 meta 字段，但当前配置不包含
+   - 风险：配置完整性受损，可能缺少重要元信息
+
+3. **网关模式丢失**（gateway-mode-missing-vs-last-good）
+   - 条件：基线有 gateway.mode 设置，但当前配置没有
+   - 风险：网关功能可能被意外禁用
+
+4. **仅更新通道根配置**（update-channel-only-root）
+   - 条件：基线有 gateway.mode 且当前配置只有 update.channel 字段
+   - 风险：配置可能被简化工具意外覆盖，只保留了更新通道设置
+
+设计考虑：
+- 基线要求：只有存在有效的基线配置时才进行比较
+- 阈值设置：文件大小检查使用 512 字节阈值和 50% 比例，避免误报小文件
+- 组合检测：多个可疑指标可以同时触发，提供全面的保护
+*/
 function resolveConfigObserveSuspiciousReasons(params: {
+  /* lyc:ai 当前配置文件的字节大小 */
   bytes: number;
+  /* lyc:ai 当前配置是否包含 meta 字段 */
   hasMeta: boolean;
+  /* lyc:ai 当前配置的网关模式（如果存在） */
   gatewayMode: string | null;
+  /* lyc:ai 当前配置的解析后对象 */
   parsed: unknown;
+  /* lyc:ai 基线配置（上次已知良好或从备份读取） */
   lastKnownGood?: ConfigHealthFingerprint;
 }): string[] {
   const reasons: string[] = [];
   const baseline = params.lastKnownGood;
+  /* lyc:ai 如果没有基线配置，则无法进行比较，返回空数组 */
   if (!baseline) {
     return reasons;
   }
+  
+  /* lyc:ai 检测文件大小骤减：可能表明配置被意外截断或覆盖 */
   if (baseline.bytes >= 512 && params.bytes < Math.floor(baseline.bytes * 0.5)) {
     reasons.push(`size-drop-vs-last-good:${baseline.bytes}->${params.bytes}`);
   }
+  
+  /* lyc:ai 检测元数据丢失：meta 字段是配置完整性的重要指标 */
   if (baseline.hasMeta && !params.hasMeta) {
     reasons.push("missing-meta-vs-last-good");
   }
+  
+  /* lyc:ai 检测网关模式丢失：可能影响网关功能 */
   if (baseline.gatewayMode && !params.gatewayMode) {
     reasons.push("gateway-mode-missing-vs-last-good");
   }
+  
+  /* lyc:ai 
+  检测仅更新通道的根配置：
+  这种模式通常出现在配置被简化工具处理后，
+  只保留了 update.channel 设置而丢失了其他重要配置
+  */
   if (baseline.gatewayMode && isUpdateChannelOnlyRoot(params.parsed)) {
     reasons.push("update-channel-only-root");
   }
+  
   return reasons;
 }
 
@@ -502,14 +569,40 @@ function formatConfigArtifactTimestamp(ts: string): string {
   return ts.replaceAll(":", "-").replaceAll(".", "-");
 }
 
+/* lyc:ai 
+persistClobberedConfigSnapshot 函数负责保存被覆盖的配置文件副本。
+这是配置健康监控的关键安全机制，防止用户因意外覆盖而丢失配置。
+
+关键特性：
+- 文件命名：config.json.clobbered.YYYY-MM-DDTHH-MM-SS-sssZ
+- 原子写入：使用 "wx" 标志确保不会覆盖现有文件
+- 安全权限：文件权限设置为 0o600（仅所有者可读写）
+- 最佳努力：失败时返回 null，不影响主流程
+
+使用场景：
+- 检测到可疑配置变化时自动触发
+- 为用户提供恢复原始配置的能力
+*/
 async function persistClobberedConfigSnapshot(params: {
   deps: Required<ConfigIoDeps>;
   configPath: string;
   raw: string;
   observedAt: string;
 }): Promise<string | null> {
+  /* lyc:ai 
+  生成被覆盖配置文件的唯一路径：
+  - 基础路径：原配置文件路径
+  - 后缀：.clobbered.时间戳
+  - 时间戳格式：YYYY-MM-DDTHH-MM-SS-sssZ（ISO 8601 变体）
+  */
   const targetPath = `${params.configPath}.clobbered.${formatConfigArtifactTimestamp(params.observedAt)}`;
   try {
+    /* lyc:ai 
+    安全写入被覆盖的配置文件：
+    - encoding: "utf-8" 确保正确的文本编码
+    - mode: 0o600 限制文件权限（仅所有者可访问）
+    - flag: "wx" 原子写入，如果文件已存在则失败（防止覆盖）
+    */
     await params.deps.fs.promises.writeFile(targetPath, params.raw, {
       encoding: "utf-8",
       mode: 0o600,
@@ -517,10 +610,15 @@ async function persistClobberedConfigSnapshot(params: {
     });
     return targetPath;
   } catch {
+    /* lyc:ai 写入失败时返回 null（最佳努力模式） */
     return null;
   }
 }
 
+/* lyc:ai 
+persistClobberedConfigSnapshotSync 是 persistClobberedConfigSnapshot 的同步版本。
+用于同步代码路径中保存被覆盖的配置文件副本。
+*/
 function persistClobberedConfigSnapshotSync(params: {
   deps: Required<ConfigIoDeps>;
   configPath: string;
@@ -563,16 +661,51 @@ function sameFingerprint(
   );
 }
 
+
+/* lyc:ai 
+observeConfigSnapshot 是配置健康监控的核心函数。
+它在每次读取配置文件时执行，用于检测和记录可疑的配置变化。
+
+核心功能：
+1. 创建配置文件的健康指纹（ConfigHealthFingerprint）
+2. 检测可疑的配置变化（如文件大小骤减、元数据丢失等）
+3. 自动保存被覆盖的配置文件副本（.clobbered 文件）
+4. 记录详细的审计日志
+5. 更新配置健康状态
+
+设计目标：
+- 预防性：在问题发生时立即检测并记录
+- 安全性：自动备份可疑的配置文件，防止数据丢失
+- 可追溯性：详细的审计日志帮助诊断问题根源
+- 性能：只在必要时执行昂贵的操作（如文件备份）
+
+调用时机：
+- 每次调用 readConfigFileSnapshot() 时
+- 通过 finalizeReadConfigSnapshotInternalResult() 间接调用
+*/
 async function observeConfigSnapshot(
   deps: Required<ConfigIoDeps>,
   snapshot: ConfigFileSnapshot,
 ): Promise<void> {
+  /* lyc:ai 如果配置文件不存在或没有原始内容，则跳过健康检查 */
   if (!snapshot.exists || typeof snapshot.raw !== "string") {
     return;
   }
 
+  /* lyc:ai ========== 阶段一：创建当前配置的健康指纹 ========== */
+  /* lyc:ai 获取配置文件的文件系统统计信息 */
   const stat = await deps.fs.promises.stat(snapshot.path).catch(() => null);
   const now = new Date().toISOString();
+  /* lyc:ai 
+  创建当前配置的健康指纹，包含以下关键信息：
+  - hash: 配置内容的 SHA256 哈希值
+  - bytes: 文件大小（字节）
+  - mtimeMs/ctimeMs: 修改时间和创建时间
+  - 文件系统元数据（dev, ino, mode, nlink, uid, gid）
+  - hasMeta: 是否包含 meta 字段（配置完整性指标）
+  - gatewayMode: 网关模式设置
+  - observedAt: 观察时间戳
+  */
   const current: ConfigHealthFingerprint = {
     hash: resolveConfigSnapshotHash(snapshot) ?? hashConfigRaw(snapshot.raw),
     bytes: Buffer.byteLength(snapshot.raw, "utf-8"),
@@ -584,12 +717,24 @@ async function observeConfigSnapshot(
     observedAt: now,
   };
 
+  /* lyc:ai ========== 阶段二：获取历史健康状态和基线 ========== */
+  /* lyc:ai 读取配置健康状态文件（~/.openclaw/logs/config-health.json） */
   let healthState = await readConfigHealthState(deps);
+  /* lyc:ai 获取当前配置路径的健康条目 */
   const entry = getConfigHealthEntry(healthState, snapshot.path);
+  /* lyc:ai 
+  确定基线配置用于比较：
+  1. 优先使用上次已知良好的配置（lastKnownGood）
+  2. 其次尝试从备份文件（.bak）中读取
+  3. 如果都没有，则使用 undefined
+  */
   const backupBaseline =
     entry.lastKnownGood ??
     (await readConfigFingerprintForPath(deps, `${snapshot.path}.bak`)) ??
     undefined;
+  
+  /* lyc:ai ========== 阶段三：检测可疑配置变化 ========== */
+  /* lyc:ai 调用 resolveConfigObserveSuspiciousReasons 检测可疑变化 */
   const suspicious = resolveConfigObserveSuspiciousReasons({
     bytes: current.bytes,
     hasMeta: current.hasMeta,
@@ -598,12 +743,20 @@ async function observeConfigSnapshot(
     lastKnownGood: backupBaseline,
   });
 
+  /* lyc:ai ========== 阶段四：处理正常配置情况 ========== */
+  /* lyc:ai 如果没有检测到可疑变化 */
   if (suspicious.length === 0) {
+    /* lyc:ai 如果配置有效，更新最后已知良好状态 */
     if (snapshot.valid) {
       const nextEntry: ConfigHealthEntry = {
         lastKnownGood: current,
         lastObservedSuspiciousSignature: null,
       };
+      /* lyc:ai 
+      只有在状态实际发生变化时才写入健康状态文件：
+      - 当前指纹与上次已知良好指纹不同，或
+      - 之前有可疑签名记录（需要清除）
+      */
       if (
         !sameFingerprint(entry.lastKnownGood, current) ||
         entry.lastObservedSuspiciousSignature !== null
@@ -615,14 +768,23 @@ async function observeConfigSnapshot(
     return;
   }
 
+  /* lyc:ai ========== 阶段五：处理可疑配置情况 ========== */
+  /* lyc:ai 创建可疑配置的唯一签名，用于去重 */
   const suspiciousSignature = `${current.hash}:${suspicious.join(",")}`;
+  /* lyc:ai 如果已经报告过相同的可疑签名，则跳过重复报告 */
   if (entry.lastObservedSuspiciousSignature === suspiciousSignature) {
     return;
   }
 
+  /* lyc:ai 尝试获取备份配置的完整指纹（用于审计日志） */
   const backup =
     (backupBaseline?.hash ? backupBaseline : null) ??
     (await readConfigFingerprintForPath(deps, `${snapshot.path}.bak`));
+  /* lyc:ai 
+  保存被覆盖的配置文件副本：
+  - 文件名格式：config.json.clobbered.YYYY-MM-DDTHH-MM-SS-sssZ
+  - 这确保了即使配置被意外覆盖，用户也能恢复原始内容
+  */
   const clobberedPath = await persistClobberedConfigSnapshot({
     deps,
     configPath: snapshot.path,
@@ -630,7 +792,19 @@ async function observeConfigSnapshot(
     observedAt: now,
   });
 
+  /* lyc:ai 记录可疑配置警告 */
   deps.logger.warn(`Config observe anomaly: ${snapshot.path} (${suspicious.join(", ")})`);
+  
+  /* lyc:ai ========== 阶段六：记录详细的审计日志 ========== */
+  /* lyc:ai 
+  创建完整的配置观察审计记录，包含：
+  - 时间戳和进程信息
+  - 当前配置的详细信息
+  - 可疑原因列表
+  - 最后已知良好配置的对比信息
+  - 备份配置信息
+  - 被覆盖文件的保存路径
+  */
   await appendConfigAuditRecord({
     fs: deps.fs,
     env: deps.env,
@@ -689,6 +863,8 @@ async function observeConfigSnapshot(
     },
   });
 
+  /* lyc:ai ========== 阶段七：更新健康状态 ========== */
+  /* lyc:ai 记录当前可疑签名，防止重复报告 */
   healthState = setConfigHealthEntry(healthState, snapshot.path, {
     ...entry,
     lastObservedSuspiciousSignature: suspiciousSignature,
@@ -696,14 +872,32 @@ async function observeConfigSnapshot(
   await writeConfigHealthState(deps, healthState);
 }
 
+/* lyc:ai 
+observeConfigSnapshotSync 是 observeConfigSnapshot 的同步版本。
+它提供相同的功能但使用同步 I/O 操作，主要用于以下场景：
+- 测试环境（避免异步复杂性）
+- 配置加载的同步路径
+- 错误恢复路径中的同步操作
+
+与异步版本的主要区别：
+- 使用 fs.statSync 而不是 fs.promises.stat
+- 使用 readConfigHealthStateSync 而不是异步版本
+- 使用 persistClobberedConfigSnapshotSync 而不是异步版本
+- 使用 appendConfigAuditRecordSync 而不是异步版本
+
+功能完全相同：检测可疑配置变化、保存备份、记录审计日志。
+*/
 function observeConfigSnapshotSync(
   deps: Required<ConfigIoDeps>,
   snapshot: ConfigFileSnapshot,
 ): void {
+  /* lyc:ai 如果配置文件不存在或没有原始内容，则跳过健康检查 */
   if (!snapshot.exists || typeof snapshot.raw !== "string") {
     return;
   }
 
+  /* lyc:ai ========== 阶段一：创建当前配置的健康指纹（同步版本） ========== */
+  /* lyc:ai 使用同步 I/O 获取配置文件的文件系统统计信息 */
   const stat = deps.fs.statSync(snapshot.path, { throwIfNoEntry: false }) ?? null;
   const now = new Date().toISOString();
   const current: ConfigHealthFingerprint = {
@@ -717,12 +911,16 @@ function observeConfigSnapshotSync(
     observedAt: now,
   };
 
+  /* lyc:ai ========== 阶段二：获取历史健康状态和基线（同步版本） ========== */
+  /* lyc:ai 使用同步函数读取配置健康状态 */
   let healthState = readConfigHealthStateSync(deps);
   const entry = getConfigHealthEntry(healthState, snapshot.path);
   const backupBaseline =
     entry.lastKnownGood ??
     readConfigFingerprintForPathSync(deps, `${snapshot.path}.bak`) ??
     undefined;
+  
+  /* lyc:ai ========== 阶段三：检测可疑配置变化 ========== */
   const suspicious = resolveConfigObserveSuspiciousReasons({
     bytes: current.bytes,
     hasMeta: current.hasMeta,
@@ -731,6 +929,7 @@ function observeConfigSnapshotSync(
     lastKnownGood: backupBaseline,
   });
 
+  /* lyc:ai ========== 阶段四：处理正常配置情况 ========== */
   if (suspicious.length === 0) {
     if (snapshot.valid) {
       const nextEntry: ConfigHealthEntry = {
@@ -742,20 +941,24 @@ function observeConfigSnapshotSync(
         entry.lastObservedSuspiciousSignature !== null
       ) {
         healthState = setConfigHealthEntry(healthState, snapshot.path, nextEntry);
+        /* lyc:ai 使用同步函数写入健康状态 */
         writeConfigHealthStateSync(deps, healthState);
       }
     }
     return;
   }
 
+  /* lyc:ai ========== 阶段五：处理可疑配置情况 ========== */
   const suspiciousSignature = `${current.hash}:${suspicious.join(",")}`;
   if (entry.lastObservedSuspiciousSignature === suspiciousSignature) {
     return;
   }
 
+  /* lyc:ai 尝试获取备份配置的完整指纹（同步版本） */
   const backup =
     (backupBaseline?.hash ? backupBaseline : null) ??
     readConfigFingerprintForPathSync(deps, `${snapshot.path}.bak`);
+  /* lyc:ai 保存被覆盖的配置文件副本（同步版本） */
   const clobberedPath = persistClobberedConfigSnapshotSync({
     deps,
     configPath: snapshot.path,
@@ -763,7 +966,10 @@ function observeConfigSnapshotSync(
     observedAt: now,
   });
 
+  /* lyc:ai 记录可疑配置警告 */
   deps.logger.warn(`Config observe anomaly: ${snapshot.path} (${suspicious.join(", ")})`);
+  
+  /* lyc:ai ========== 阶段六：记录详细的审计日志（同步版本） ========== */
   appendConfigAuditRecordSync({
     fs: deps.fs,
     env: deps.env,
@@ -881,6 +1087,7 @@ function resolveConfigPathForDeps(deps: Required<ConfigIoDeps>): string {
   if (deps.configPath) {
     return deps.configPath;
   }
+  // lyc: 用户home目录+"/.openclaw/openclaw.json"是默认文件路径
   return resolveConfigPath(deps.env, resolveStateDir(deps.env, deps.homedir));
 }
 
@@ -899,6 +1106,7 @@ function normalizeDeps(overrides: ConfigIoDeps = {}): Required<ConfigIoDeps> {
 function maybeLoadDotEnvForConfig(env: NodeJS.ProcessEnv): void {
   // Only hydrate dotenv for the real process env. Callers using injected env
   // objects (tests/diagnostics) should stay isolated.
+  // lyc: 只加载真实环境变量，注入环境变量（测试/诊断）应该保持隔离。
   if (env !== process.env) {
     return;
   }
@@ -1024,10 +1232,24 @@ function createConfigFileSnapshot(params: {
   };
 }
 
+/* lyc:ai 
+finalizeReadConfigSnapshotInternalResult 是配置快照读取的最终处理函数。
+它在 readConfigFileSnapshotInternal 函数的末尾被调用，
+负责执行配置健康监控（observeConfigSnapshot）并返回最终结果。
+
+关键作用：
+- 触发配置健康检查和可疑变化检测
+- 确保每次配置读取都会进行健康监控
+- 返回原始结果，不修改快照内容
+
+调用链：
+readConfigFileSnapshotInternal() -> finalizeReadConfigSnapshotInternalResult() -> observeConfigSnapshot()
+*/
 async function finalizeReadConfigSnapshotInternalResult(
   deps: Required<ConfigIoDeps>,
   result: ReadConfigFileSnapshotInternalResult,
 ): Promise<ReadConfigFileSnapshotInternalResult> {
+  /* lyc:ai 执行配置健康监控，检测可疑变化并记录审计日志 */
   await observeConfigSnapshot(deps, result.snapshot);
   return result;
 }
@@ -1036,6 +1258,19 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
   const deps = normalizeDeps(overrides);
   const configPath = resolveConfigPathForDeps(deps);
 
+  /* lyc:ai 
+  observeLoadConfigSnapshot 是配置加载路径中的同步健康监控函数。
+  它在 loadConfig() 函数中被调用，用于同步执行配置健康检查。
+  
+  与异步版本的区别：
+  - 使用 observeConfigSnapshotSync 而不是 observeConfigSnapshot
+  - 用于同步配置加载路径（如 CLI 启动时的初始配置加载）
+  - 返回原始快照，不修改内容
+  
+  调用场景：
+  - CLI 启动时的配置加载
+  - 同步配置验证路径
+  */
   function observeLoadConfigSnapshot(snapshot: ConfigFileSnapshot): ConfigFileSnapshot {
     observeConfigSnapshotSync(deps, snapshot);
     return snapshot;
@@ -1214,10 +1449,47 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     }
   }
 
+  /* lyc:ai 
+  配置快照读取的核心内部函数。
+  它执行完整的配置文件读取、解析、验证和快照创建流程。
+  
+  执行流程详解：
+  
+  阶段一：配置文件存在性检查
+  - 检查配置文件是否存在
+  - 如果不存在，返回空的有效快照
+  
+  阶段二：文件读取和基础解析
+  - 读取原始文件内容
+  - 使用 JSON5 解析器解析配置
+  - 处理解析失败的情况
+  
+  阶段三：配置恢复和包含处理
+  - 执行可疑配置恢复（maybeRecoverSuspiciousConfigRead）
+  - 解析 $include 指令
+  - 处理包含解析失败的情况
+  
+  阶段四：环境变量和遗留配置处理
+  - 解析环境变量引用（${VAR}）
+  - 转换缺失的环境变量为警告而非错误
+  - 处理遗留配置键的迁移
+  
+  阶段五：配置验证和快照创建
+  - 执行完整的配置验证（包括插件验证）
+  - 创建最终的配置快照
+  - 收集环境变量快照用于后续写入
+  
+  阶段六：异常处理
+  - 处理各种 I/O 和解析异常
+  - 提供用户友好的错误信息
+  */
   async function readConfigFileSnapshotInternal(): Promise<ReadConfigFileSnapshotInternalResult> {
+    /* lyc:ai 加载 .env 文件（如果存在） */
     maybeLoadDotEnvForConfig(deps.env);
+    /* lyc:ai 检查配置文件是否存在 */
     const exists = deps.fs.existsSync(configPath);
     if (!exists) {
+      /* lyc:ai 配置文件不存在的情况：返回空的有效快照 */
       const hash = hashConfigRaw(null);
       const config = {};
       const legacyIssues: LegacyConfigIssue[] = [];
@@ -1239,9 +1511,14 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
     }
 
     try {
+      /* lyc:ai ========== 阶段二：文件读取和基础解析 ========== */
+      /* lyc:ai 读取配置文件的原始内容 */
       const raw = deps.fs.readFileSync(configPath, "utf-8");
+      /* lyc:ai 计算原始内容的哈希值，用于配置健康检查 */
       const rawHash = hashConfigRaw(raw);
+      /* lyc:ai 使用 JSON5 解析器解析配置内容（支持注释、尾随逗号等扩展语法） */
       const parsedRes = parseConfigJson5(raw, deps.json5);
+      /* lyc:ai 处理 JSON5 解析失败的情况 */
       if (!parsedRes.ok) {
         return await finalizeReadConfigSnapshotInternalResult(deps, {
           snapshot: createConfigFileSnapshot({
@@ -1260,7 +1537,14 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         });
       }
 
-      // Resolve $include directives
+      /* lyc:ai 
+      ========== 阶段三：配置恢复和包含处理 ==========
+      执行可疑配置恢复和 $include 指令解析
+      */
+      /* lyc:ai 
+      maybeRecoverSuspiciousConfigRead 函数检测并尝试恢复可疑的配置文件。
+      这包括检测配置文件是否被意外截断、覆盖或损坏，并尝试从备份中恢复。
+      */
       const recovered = await maybeRecoverSuspiciousConfigRead({
         deps,
         configPath,
@@ -1271,10 +1555,12 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       const effectiveParsed = recovered.parsed;
       const hash = hashConfigRaw(effectiveRaw);
 
+      /* lyc:ai 解析 $include 指令，支持配置文件模块化 */
       let resolved: unknown;
       try {
         resolved = resolveConfigIncludesForRead(effectiveParsed, configPath, deps);
       } catch (err) {
+        /* lyc:ai 处理 $include 指令解析失败的情况 */
         const message =
           err instanceof ConfigIncludeError
             ? err.message
@@ -1297,8 +1583,21 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         });
       }
 
+      /* lyc:ai 
+      ========== 阶段四：环境变量和遗留配置处理 ==========
+      解析环境变量引用并处理遗留配置键
+      */
+      /* lyc:ai 
+      resolveConfigForRead 函数处理环境变量引用（${VAR} 语法）。
+      它将环境变量引用替换为实际值，并收集缺失环境变量的警告。
+      */
       const readResolution = resolveConfigForRead(resolved, deps.env);
 
+      /* lyc:ai 
+      将缺失的环境变量引用转换为警告而非致命错误。
+      这允许网关在降级模式下启动，当非关键配置部分引用了未设置的环境变量时
+      （例如可选的提供者 API 密钥）。
+      */
       // Convert missing env var references to config warnings instead of fatal errors.
       // This allows the gateway to start in degraded mode when non-critical config
       // sections reference unset env vars (e.g. optional provider API keys).
@@ -1307,11 +1606,20 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         message: `Missing env var "${w.varName}" - feature using this value will be unavailable`,
       }));
 
+      /* lyc:ai 获取解析后的配置对象（已替换环境变量） */
       const resolvedConfigRaw = readResolution.resolvedConfigRaw;
+      /* lyc:ai 处理遗留配置键的迁移和兼容性 */
       const legacyResolution = resolveLegacyConfigForRead(resolvedConfigRaw, effectiveParsed);
       const effectiveConfigRaw = legacyResolution.effectiveConfigRaw;
+      
+      /* lyc:ai 
+      ========== 阶段五：配置验证和快照创建 ==========
+      执行完整的配置验证，包括插件特定的验证规则
+      */
+      /* lyc:ai 调用 validateConfigObjectWithPlugins 执行完整的配置验证 */
       const validated = validateConfigObjectWithPlugins(effectiveConfigRaw, { env: deps.env });
       if (!validated.ok) {
+        /* lyc:ai 配置验证失败：返回无效的快照 */
         return await finalizeReadConfigSnapshotInternalResult(deps, {
           snapshot: createConfigFileSnapshot({
             path: configPath,
@@ -1329,8 +1637,12 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         });
       }
 
+      /* lyc:ai 配置验证成功：创建有效的配置快照 */
+      /* lyc:ai 检查配置版本是否来自未来（防止降级问题） */
       warnIfConfigFromFuture(validated.config, deps.logger);
+      /* lyc:ai 将验证后的配置转换为运行时配置格式 */
       const snapshotConfig = materializeRuntimeConfig(validated.config, "snapshot");
+      /* lyc:ai 返回有效的配置快照，包含所有警告和遗留问题信息 */
       return await finalizeReadConfigSnapshotInternalResult(deps, {
         snapshot: createConfigFileSnapshot({
           path: configPath,
@@ -1350,6 +1662,10 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         envSnapshotForRestore: readResolution.envSnapshotForRestore,
       });
     } catch (err) {
+      /* lyc:ai 
+      ========== 阶段六：异常处理 ==========
+      处理各种 I/O 和解析异常，提供用户友好的错误信息
+      */
       const nodeErr = err as NodeJS.ErrnoException;
       let message: string;
       if (nodeErr?.code === "EACCES") {
@@ -1369,6 +1685,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       } else {
         message = `read failed: ${String(err)}`;
       }
+      /* lyc:ai 返回包含错误信息的无效快照 */
       return await finalizeReadConfigSnapshotInternalResult(deps, {
         snapshot: createConfigFileSnapshot({
           path: configPath,
@@ -1768,6 +2085,21 @@ export async function readBestEffortConfig(): Promise<OpenClawConfig> {
   return await createConfigIO().readBestEffortConfig();
 }
 
+/* lyc:ai 
+配置 I/O 模块的核心导出函数。
+它被 doctor-config-preflight.ts 中的 runDoctorConfigPreflight 函数调用，
+用于读取 OpenClaw 配置文件的完整快照。
+
+功能特点：
+- 安全读取：处理文件不存在、权限错误等各种异常情况
+- 配置解析：支持 JSON5 格式、环境变量引用、$include 指令
+- 验证和警告：执行完整的配置验证并收集警告信息
+- 快照创建：返回包含存在性、有效性、问题列表等信息的完整快照
+- 最佳努力：即使配置无效也返回部分有效的配置对象
+
+调用链：
+doctor-config-preflight.ts -> readConfigFileSnapshot() -> createConfigIO().readConfigFileSnapshot()
+*/
 export async function readConfigFileSnapshot(): Promise<ConfigFileSnapshot> {
   return await createConfigIO().readConfigFileSnapshot();
 }

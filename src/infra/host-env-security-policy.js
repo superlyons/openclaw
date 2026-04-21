@@ -8,6 +8,7 @@ function sortUniqueUppercase(values) {
   );
 }
 
+// 
 function derivePolicyArrays(policy) {
   const blockedEverywhereKeys = policy.blockedEverywhereKeys ?? [];
   const blockedOverrideOnlyKeys = policy.blockedOverrideOnlyKeys ?? [];

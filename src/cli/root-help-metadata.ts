@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 let precomputedRootHelpText: string | null | undefined;
 
+// lyc: 加载预计算的根帮助文本, 从 openclaw/src/cli-startup-metadata.json 中读取
 export function loadPrecomputedRootHelpText(): string | null {
   if (precomputedRootHelpText !== undefined) {
     return precomputedRootHelpText;
@@ -27,6 +28,7 @@ export function loadPrecomputedRootHelpText(): string | null {
   return null;
 }
 
+// lyc: 输出预计算的根帮助文本, 如果存在, 则写入 stdout返回 true, 否则返回 false
 export function outputPrecomputedRootHelpText(): boolean {
   const rootHelpText = loadPrecomputedRootHelpText();
   if (!rootHelpText) {

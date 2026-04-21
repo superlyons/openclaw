@@ -136,6 +136,13 @@ const findLatestMtime = (dirPath, shouldSkip, deps) => {
   return latest;
 };
 
+/* lyc: 
+检查是否有未提交的更改或新添加的文件需要被处理
+git status --porcelain --untracked-files=normal -- src package.json
+--porcelain: 使 git status 的输出格式更加机器可读
+--untracked-files=normal: 包含未跟踪的文件,那些新添加到仓库中但尚未被 git add 添加到暂存区的文件
+-- src package.json: 告诉 Git 只关注 src 目录和 package.json 文件的状态
+*/
 const readGitStatus = (deps) => {
   try {
     const result = deps.spawnSync(
@@ -171,6 +178,8 @@ const hasDirtySourceTree = (deps) => {
   return parseGitStatusPaths(output).some((repoPath) => isBuildRelevantRunNodePath(repoPath));
 };
 
+// lyc: 读取构建戳文件(/home/openclaw/dist/.openclaw/.buildstamp文件), 
+// lyc: 返回{mtime: 文件修改时间|null, head: 文件.head内容|null}
 const readBuildStamp = (deps) => {
   const mtime = statMtime(deps.buildStampPath, deps.fs);
   if (mtime == null) {
@@ -204,18 +213,27 @@ const hasSourceMtimeChanged = (stampMtime, deps) => {
   return latestSourceMtime != null && latestSourceMtime > stampMtime;
 };
 
+// lyc: 解决构建需求, 检查是否需要构建
 export const resolveBuildRequirement = (deps) => {
+  // lyc: 强制构建, 无论是否需要构建
   if (deps.env.OPENCLAW_FORCE_BUILD === "1") {
     return { shouldBuild: true, reason: "force_build" };
   }
+  // lyc: 读取构建戳文件(/home/openclaw/dist/.openclaw/.buildstamp文件), 
   const stamp = readBuildStamp(deps);
+  // lyc: 如果构建戳文件不存在, 则需要构建
   if (stamp.mtime == null) {
     return { shouldBuild: true, reason: "missing_build_stamp" };
   }
+  // lyc: 如果分发目录下的入口文件不存在(/home/openclaw/dist/entry.js), 则需要构建
   if (statMtime(deps.distEntry, deps.fs) == null) {
     return { shouldBuild: true, reason: "missing_dist_entry" };
   }
 
+  /* lyc: 遍历配置文件路径, 检查是否需要构建
+    配置文件路径[/home/openclaw/tsconfig.json, /home/openclaw/package.json, /home/openclaw/tsdown.config.ts]
+    如果配置文件修改时间大于构建戳文件修改时间, 则需要构建
+    */
   for (const filePath of deps.configFiles) {
     const mtime = statMtime(filePath, deps.fs);
     if (mtime != null && mtime > stamp.mtime) {
@@ -223,13 +241,17 @@ export const resolveBuildRequirement = (deps) => {
     }
   }
 
+  // lyc: resolveGitHead实现: scripts\build-stamp.mjs
+  // lyc: 解析当前Git分支的HEAD, 返回HEAD值|null
   const currentHead = resolveGitHead(deps);
+  // lyc: 如果当前Git分支的HEAD与构建戳文件中的HEAD不同, 则需要构建
   if (currentHead && !stamp.head) {
     return { shouldBuild: true, reason: "build_stamp_missing_head" };
   }
   if (currentHead && stamp.head && currentHead !== stamp.head) {
     return { shouldBuild: true, reason: "git_head_changed" };
   }
+  // lyc: 如果当前Git分支的HEAD与构建戳文件中的HEAD相同, 则需要检查是否有脏的源树修改, 即是否有未提交的更改或新添加的文件需要被处理
   if (currentHead) {
     const dirty = hasDirtySourceTree(deps);
     if (dirty === true) {
@@ -240,6 +262,7 @@ export const resolveBuildRequirement = (deps) => {
     }
   }
 
+  // lyc: 执行到此代表没有git环境, 则需要通过检查源文件修改时间来判断是否需要构建
   if (hasSourceMtimeChanged(stamp.mtime, deps)) {
     return { shouldBuild: true, reason: "source_mtime_newer" };
   }
@@ -276,6 +299,7 @@ const logRunner = (message, deps) => {
   deps.stderr.write(`[openclaw] ${message}\n`);
 };
 
+// lyc: 等待子进程退出
 const waitForSpawnedProcess = async (childProcess, deps) => {
   let forwardedSignal = null;
   let onSigInt;
@@ -323,12 +347,24 @@ const waitForSpawnedProcess = async (childProcess, deps) => {
   }
 };
 
+/** lyc:ai
+ * 运行OpenClaw
+ * 
+ * 此函数启动 OpenClaw 应用程序，将命令行参数传递给它。
+ * 应用程序的退出码将被返回，用于判断是否成功运行。
+ */
 const runOpenClaw = async (deps) => {
+  /* lyc: 命令参数, 例如: node myscript.js arg1 arg2 arg3, process.argv=['node', '/path/to/myscript.js', 'arg1', 'arg2', 'arg3'].slice(2)=['arg1', 'arg2', 'arg3']
+    deps.args 为命令行参数, 例如: ['arg1', 'arg2', 'arg3']
+    执行OpenClaw进程, 并将命令行参数传递给它
+    例如: node openclaw.mjs arg1 arg2 arg3
+    */
   const nodeProcess = deps.spawn(deps.execPath, ["openclaw.mjs", ...deps.args], {
     cwd: deps.cwd,
     env: deps.env,
     stdio: "inherit",
   });
+  // lyc: 等待OpenClaw进程退出
   const res = await waitForSpawnedProcess(nodeProcess, deps);
   if (res.exitSignal) {
     return getSignalExitCode(res.exitSignal);
@@ -339,6 +375,7 @@ const runOpenClaw = async (deps) => {
   return res.exitCode ?? 1;
 };
 
+// lyc: 运行时后构建(post-build)流程 如果发生错误输出日志, 并返回false,否则返回true
 const syncRuntimeArtifacts = (deps) => {
   try {
     deps.runRuntimePostBuild({ cwd: deps.cwd });
@@ -354,6 +391,7 @@ const syncRuntimeArtifacts = (deps) => {
 
 const writeBuildStamp = (deps) => {
   try {
+    // lyc: 实现文件: scripts\build-stamp.mjs
     writeDistBuildStamp({
       cwd: deps.cwd,
       fs: deps.fs,
@@ -374,29 +412,44 @@ export async function runNodeMain(params = {}) {
     fs: params.fs ?? fs,
     stderr: params.stderr ?? process.stderr,
     process: params.process ?? process,
+    // lyc: 代表node.js的可执行文件路径例如"/usr/lib/x4/node"
     execPath: params.execPath ?? process.execPath,
+    // lyc: node.js进程当前的工作目录, 通常是启动 Node.js 进程时所在的目录，但也可以通过 process.chdir() 方法来改变
+    // lyc: 例如运行node scripts/run-node.mjs, cwd()="/home/openclaw", openclaw目录下有scripts目录, scripts目录下有run-node.mjs
     cwd: params.cwd ?? process.cwd(),
+    // lyc: 命令参数, 例如: node myscript.js arg1 arg2 arg3, process.argv=['node', '/path/to/myscript.js', 'arg1', 'arg2', 'arg3'].slice(2)=['arg1', 'arg2', 'arg3']
     args: params.args ?? process.argv.slice(2),
     env: params.env ? { ...params.env } : { ...process.env },
     runRuntimePostBuild: params.runRuntimePostBuild ?? runRuntimePostBuild,
   };
 
+  // lyc: 分发目录: /home/openclaw/dist
   deps.distRoot = path.join(deps.cwd, "dist");
+  // lyc: 分发目录下的入口文件: /home/openclaw/dist/entry.js
   deps.distEntry = path.join(deps.distRoot, "/entry.js");
+  // lyc: 分发目录下的构建戳文件(.buildstamp是文件): /home/openclaw/dist/.buildstamp
   deps.buildStampPath = path.join(deps.distRoot, ".buildstamp");
+  // lyc: 源代码根目录: [/home/openclaw/src, /home/openclaw/extensions]
   deps.sourceRoots = runNodeSourceRoots.map((sourceRoot) => ({
     name: sourceRoot,
     path: path.join(deps.cwd, sourceRoot),
   }));
+  // lyc: 配置文件路径: [/home/openclaw/tsconfig.json, /home/openclaw/package.json, /home/openclaw/tsdown.config.ts]
   deps.configFiles = runNodeConfigFiles.map((filePath) => path.join(deps.cwd, filePath));
 
+  // lyc: 解决构建需求, 检查是否需要构建
   const buildRequirement = resolveBuildRequirement(deps);
+  // lyc: 如果不需要构建, 则直接运行OpenClaw
   if (!buildRequirement.shouldBuild) {
+    // lyc: env.OPENCLAW_WATCH_MODE !== "1" && 执行 运行时后构建(post-build)流程(runRuntimePostBuild) 发生错误(返回false)
     if (!shouldSkipCleanWatchRuntimeSync(deps) && !syncRuntimeArtifacts(deps)) {
       return 1;
     }
+    // lyc: 执行到此代表不需要构建, 则直接运行OpenClaw
     return await runOpenClaw(deps);
   }
+
+  // lyc: 这里代表需要构建
 
   logRunner(
     `Building TypeScript (dist is stale: ${buildRequirement.reason} - ${formatBuildReason(buildRequirement.reason)}).`,
@@ -404,6 +457,7 @@ export async function runNodeMain(params = {}) {
   );
   const buildCmd = deps.execPath;
   const buildArgs = compilerArgs;
+  // lyc: 执行构建命令: node scripts/tsdown-build.mjs --no-clean
   const build = deps.spawn(buildCmd, buildArgs, {
     cwd: deps.cwd,
     env: deps.env,
@@ -420,13 +474,21 @@ export async function runNodeMain(params = {}) {
   if (buildRes.exitCode !== 0 && buildRes.exitCode !== null) {
     return buildRes.exitCode;
   }
+  // lyc: 执行 运行时后构建(post-build)流程(runRuntimePostBuild) 发生错误(返回false)
   if (!syncRuntimeArtifacts(deps)) {
     return 1;
   }
+  // lyc: 写入构建戳文件(.buildstamp是文件): /home/openclaw/dist/.buildstamp
   writeBuildStamp(deps);
+  // lyc: 运行OpenClaw
   return await runOpenClaw(deps);
 }
 
+/* lyc: 主程序入口
+package.json.scripts["dev"] = node scripts/run-node.mjs
+npm run dev 会执行node scripts/run-node.mjs, 因此process.argv[1]="scripts/run-node.mjs"
+即如果是在命令行中运行了node scripts/run-node.mjs则条件为true
+*/
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   void runNodeMain()
     .then((code) => process.exit(code))

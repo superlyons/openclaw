@@ -1,5 +1,6 @@
 import { isValueToken } from "../infra/cli-root-options.js";
 
+// lyc: 获取CLI根选项的值, 支持内联值和后续参数
 export function takeCliRootOptionValue(
   raw: string,
   next: string | undefined,
