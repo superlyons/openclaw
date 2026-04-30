@@ -1,3 +1,15 @@
+/* lyc:ai
+Crestodian TUI后端 —— 实现OpenClaw的TuiBackend接口，为Crestodian提供交互式终端用户界面
+核心流程:
+1. runCrestodianTui() 创建CrestodianTuiBackend实例 → 调用 runTui() 启动TUI
+2. 用户输入通过 sendChat() → resolveReply() 处理:
+   a. 有pending操作: 检查用户是否说"yes"确认→执行/跳过
+   b. 无pending: 调resolveCrestodianOperation解析意图→executeCrestodianOperation执行
+      - 若操作是open-tui: 退出Crestodian，切换到用户的agent TUI(handoff)
+      - 若操作是持久性的(config-set/model切换等): 暂存到pending，询问用户确认
+      - 否则直接执行，返回结果文本
+3. 会话固定使用"crestodian" agent和session key，消息历史管理在本地的messages[]中
+*/
 import { randomUUID } from "node:crypto";
 import type { SessionsPatchParams, SessionsPatchResult } from "../gateway/protocol/index.js";
 import { buildAgentMainSessionKey } from "../routing/session-key.js";
@@ -320,6 +332,13 @@ class CrestodianTuiBackend implements TuiBackend {
   }
 }
 
+/* lyc:ai
+Crestodian TUI入口函数:
+1. 无限循环(for(;;)): 加载系统概览 → 创建CrestodianTuiBackend → 调用runTui启动TUI
+2. TUI退出后检查handoff: 如果用户说了"talk to agent"等，执行handoff操作
+   (open-tui)退出循环，回到正常agent TUI；否则直接退出
+3. nextInput: 支持跨TUI循环传递下一条用户消息
+*/
 export async function runCrestodianTui(
   opts: CrestodianTuiOptions,
   runtime: RuntimeEnv,

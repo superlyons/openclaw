@@ -1,3 +1,17 @@
+/* lyc:ai
+Crestodian系统概览模块 —— 收集并展示OpenClaw系统当前状态
+loadCrestodianOverview 加载以下信息:
+- config: 配置文件路径、是否存在、是否有效、问题列表、hash
+- agents: 所有agent摘要(id/name/isDefault/model/workspace)
+- defaultAgentId: 默认agent的ID
+- defaultModel: 默认AI模型
+- tools: 本地命令行工具探针(codex/claude)及API密钥状态(openai/anthropic)
+- gateway: 网关连接URL、可达性、错误信息
+- references: 文档和源码路径
+
+formatCrestodianOverview: 将概览格式化为可读文本
+formatCrestodianStartupMessage: 生成TUI启动时的欢迎消息
+*/
 import {
   listAgentEntries,
   resolveAgentEffectiveModelPrimary,
@@ -119,6 +133,15 @@ function resolveFastTestReferences(env: NodeJS.ProcessEnv): OpenClawReferencePat
   };
 }
 
+/* lyc:ai
+加载Crestodian系统概览 —— 收集OpenClaw所有关键组件的状态信息
+并行获取:
+- 配置文件快照(readConfigFileSnapshot): 路径/存在性/有效性/问题/hash
+- 本地命令行工具探针(probeLocalCommand): 检查codex/claude是否可用及版本
+- 网关可达性探针(probeGatewayUrl): WebSocket连接到网关
+- 文档和源码引用路径(resolveOpenClawReferencePaths)
+- API密钥状态(env.OPENAI_API_KEY / ANTHROPIC_API_KEY)
+*/
 export async function loadCrestodianOverview(
   opts: { env?: NodeJS.ProcessEnv } = {},
 ): Promise<CrestodianOverview> {

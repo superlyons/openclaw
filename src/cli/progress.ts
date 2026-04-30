@@ -1,3 +1,19 @@
+/* lyc:ai
+CLI进度指示器 —— 在终端显示加载动画和进度条
+createCliProgress 支持多种后端:
+1. OSC进度协议(OscProgressController): 支持现代终端模拟器的原生进度条
+2. @clack/prompts spinner: 传统spinner旋转动画
+3. 纯文本行渲染: TTY环境下的带百分比文本行
+4. 日志行渲染: 非TTY环境下的定时日志输出
+
+关键参数:
+- indeterminate: 不确定时间(旋转模式)
+- total: 总数(确定模式，配合tick累加)
+- delayMs: 延迟显示时间(0=立即)
+- fallback: 非TTY回退策略(spinner/line/log/none)
+
+Crestodian中使用: run-main.ts中 "Starting Crestodian…" spinner
+*/
 import { spinner } from "@clack/prompts";
 import { createOscProgressController, supportsOscProgress } from "osc-progress";
 import {

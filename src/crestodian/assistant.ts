@@ -1,3 +1,21 @@
+/* lyc:ai
+Crestodian AI助手规划器 —— 当正则匹配无法解析用户意图时，调用AI模型进行语义理解
+两级规划策略:
+1. planCrestodianCommandWithConfiguredModel: 使用用户已配置的模型
+   - 先检查配置文件是否存在且有效
+   - 调用prepareSimpleCompletionModelForAgent获取模型和认证
+   - 发送systemPrompt+userPrompt给模型，解析返回的结构化命令
+   - 超时时间: CRESTODIAN_ASSISTANT_TIMEOUT_MS
+2. planCrestodianCommandWithLocalRuntime: 回退到本地runtime推理
+   - 遍历selectCrestodianLocalPlannerBackends返回的本地后端列表
+   - 使用系统已安装的CLI工具(codex/claude)或嵌入式PI agent
+   - 临时目录管理: createTempDir → 推理 → removeTempDir
+
+prompt定义: assistant-prompts.ts
+- CRESTODIAN_ASSISTANT_SYSTEM_PROMPT: 系统提示词
+- buildCrestodianAssistantUserPrompt: 构建用户提示词（含系统概览上下文）
+- parseCrestodianAssistantPlanText: 解析AI返回的文本为结构化Plan
+*/
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -41,6 +59,12 @@ export type CrestodianLocalRuntimePlannerDeps = {
   removeTempDir?: (dir: string) => Promise<void>;
 };
 
+/* lyc:ai
+AI规划器主入口 —— 两级策略:
+1. 先尝试planCrestodianCommandWithConfiguredModel: 用用户配置的模型推理(快速、准确)
+2. 失败则回退到planCrestodianCommandWithLocalRuntime: 用本地runtime/CLI工具推理
+返回CrestodianAssistantPlan(command+reply+modelLabel) 或 null(规划失败)
+*/
 export async function planCrestodianCommand(params: {
   input: string;
   overview: CrestodianOverview;

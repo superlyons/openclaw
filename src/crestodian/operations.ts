@@ -1,3 +1,23 @@
+/* lyc:ai
+Crestodian操作定义与解析引擎
+支持的操作类型(CrestodianOperation):
+- overview: 系统概览
+- doctor / doctor-fix: 诊断/修复
+- status: 状态检查
+- health: 健康检查
+- config-validate / config-set / config-set-ref: 配置管理
+- gateway-status / gateway-start / gateway-stop / gateway-restart: 网关控制
+- agents / models: Agent和模型列表
+- audit: 审计日志
+- create-agent: 创建agent
+- open-tui: 切换到agent TUI
+- set-default-model: 设置默认模型
+- setup: 引导设置
+
+parseCrestodianOperation: 通过正则表达式匹配用户输入，转为结构化操作
+isPersistentCrestodianOperation: 判断是否需要用户确认的持久性操作
+executeCrestodianOperation: 执行操作并返回结果
+*/
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import type { ConfigSetOptions } from "../cli/config-set-input.js";
 import type { DoctorOptions } from "../commands/doctor.types.js";
@@ -99,6 +119,13 @@ const ANTHROPIC_API_DEFAULT_MODEL_REF = "anthropic/claude-opus-4-7";
 const CLAUDE_CLI_DEFAULT_MODEL_REF = "claude-cli/claude-opus-4-7";
 const CODEX_CLI_DEFAULT_MODEL_REF = "codex-cli/gpt-5.5";
 
+/* lyc:ai
+用户意图解析器: 将自然语言文本通过关键词和正则匹配转为CrestodianOperation
+匹配顺序: help/overview → audit → config-set-ref → config-set → config validate →
+  setup → doctor/doctor-fix → health → gateway(restart/start/stop/status) →
+  status → agent(create/talk/list) → model(set/list) → tui → quit/exit → none(兜底)
+无法匹配时返回kind="none"并附带提示消息，告诉用户支持的命令
+*/
 export function parseCrestodianOperation(input: string): CrestodianOperation {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
@@ -440,6 +467,26 @@ async function resolveTuiAgentId(params: {
   return match?.id ?? requested;
 }
 
+/* lyc:ai
+Crestodian操作执行器 —— 根据CrestodianOperation的kind分发到对应处理逻辑
+支持的操作及处理:
+- none: 输出提示消息
+- overview: 加载并格式化系统概览
+- status/health: 加载概览，输出状态信息(网关/工具链/API密钥)
+- doctor/doctor-fix: 运行openclaw doctor诊断(修复)
+- config-validate: 验证配置文件
+- config-set: 设置配置项(如 agents.defaults.model.primary 等)
+- config-set-ref: 设置SecretRef引用(env/file/exec)
+- gateway-status: 检查网关连接，格式化状态输出
+- gateway-start/stop/restart: 通过daemon-cli/lifecycle控制网关启停
+- agents/models: 列出agent和模型
+- audit: 输出审计日志
+- create-agent: 创建新的agent配置
+- open-tui: 标记handoff(在tui-backend中处理)
+- set-default-model: 修改agents.defaults.model.primary
+- setup: 引导式初始化设置
+返回CrestodianOperationResult: {applied, exitsInteractive?, message?, nextInput?}
+*/
 export async function executeCrestodianOperation(
   operation: CrestodianOperation,
   runtime: RuntimeEnv,
