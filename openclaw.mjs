@@ -21,6 +21,8 @@ const isSupportedNodeVersion = (version) =>
   version.major > MIN_NODE_MAJOR ||
   (version.major === MIN_NODE_MAJOR && version.minor >= MIN_NODE_MINOR);
 
+// lyc: 确保Node.js版本符合要求 >= 22.12
+// lyc: 如果当前Node.js版本低于要求, 则提示用户并退出程序
 const ensureSupportedNodeVersion = () => {
   if (isSupportedNodeVersion(parseNodeVersion(process.versions.node))) {
     return;
@@ -36,8 +38,10 @@ const ensureSupportedNodeVersion = () => {
   process.exit(1);
 };
 
+// lyc: 确保Node.js版本符合要求 >= 22.12
 ensureSupportedNodeVersion();
 
+// lyc: 启用模块编译缓存; 如果环境变量NODE_DISABLE_COMPILE_CACHE为true, 则不启用缓存
 // https://nodejs.org/api/module.html#module-compile-cache
 if (module.enableCompileCache && !process.env.NODE_DISABLE_COMPILE_CACHE) {
   try {
@@ -68,8 +72,11 @@ const isDirectModuleNotFoundError = (err, specifier) => {
   );
 };
 
+// lyc: 安装进程警告过滤器
 const installProcessWarningFilter = async () => {
   // Keep bootstrap warnings consistent with the TypeScript runtime.
+  // lyc: 保持bootstrap警告与TypeScript运行时的风格一致。
+  // lyc: 注意: src\infra\warning-filter.ts有installProcessWarningFilter的实现, 但不确定/dist/warning-filter.js是否来自于此
   for (const specifier of ["./dist/warning-filter.js", "./dist/warning-filter.mjs"]) {
     try {
       const mod = await import(specifier);
@@ -145,6 +152,8 @@ const loadPrecomputedHelpText = (key) => {
   }
 };
 
+// lyc: 尝试输出根帮助文本
+// lyc: 如果成功输出, 则返回true; 否则返回false
 const tryOutputBareRootHelp = async () => {
   if (!isBareRootHelpInvocation(process.argv)) {
     return false;
@@ -182,7 +191,7 @@ const tryOutputBrowserHelp = () => {
   process.stdout.write(precomputed);
   return true;
 };
-
+// lyc: 尝试输出根帮助文本
 if (!isHelpFastPathDisabled() && (await tryOutputBareRootHelp())) {
   // OK
 } else if (!isHelpFastPathDisabled() && tryOutputBrowserHelp()) {

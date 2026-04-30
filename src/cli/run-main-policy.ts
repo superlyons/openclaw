@@ -11,6 +11,7 @@ import {
 import { resolveCliArgvInvocation } from "./argv-invocation.js";
 import { resolveCliCommandPathPolicy } from "./command-path-policy.js";
 
+// lyc: 将 --update 标志转换为 update 命令 例如: openclaw agent --message "hello" --update -> openclaw agent --message "hello" update
 export function rewriteUpdateFlagArgv(argv: string[]): string[] {
   const index = argv.indexOf("--update");
   if (index === -1) {
@@ -22,14 +23,18 @@ export function rewriteUpdateFlagArgv(argv: string[]): string[] {
   return next;
 }
 
+// lyc: 检查当前命令(commandPath)是否需要确保CLI路径
 export function shouldEnsureCliPath(argv: string[]): boolean {
+  // lyc: 解析调用信息, 获得命令路径, 主命令, 是否有帮助或版本选项, 是否为根帮助调用
   const invocation = resolveCliArgvInvocation(argv);
   if (invocation.hasHelpOrVersion || shouldStartCrestodianForBareRoot(argv)) {
     return false;
   }
+  // lyc: 检查命令的策略配置是否需要确保CLI路径, 
   return resolveCliCommandPathPolicy(invocation.commandPath).ensureCliPath;
 }
 
+// lyc:ai 检查是否应该使用根帮助快速路径. 当用户请求根级别的帮助信息时返回true，可以跳过完整的命令注册流程
 export function shouldUseRootHelpFastPath(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
@@ -59,11 +64,13 @@ export function shouldUseBrowserHelpFastPath(
   );
 }
 
+// lyc: 检查是否应该启动Crestodian(克雷斯托迪安), 当用户请求根命令(openclaw)时返回true
 export function shouldStartCrestodianForBareRoot(argv: string[]): boolean {
   const invocation = resolveCliArgvInvocation(argv);
   return invocation.commandPath.length === 0 && !invocation.hasHelpOrVersion;
 }
 
+// lyc: 检查是否应该启动Crestodian(克雷斯托迪安), 当用户请求onboard命令并添加--modern标志时返回true
 export function shouldStartCrestodianForModernOnboard(argv: string[]): boolean {
   const invocation = resolveCliArgvInvocation(argv);
   return (

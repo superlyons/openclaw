@@ -67,20 +67,33 @@ export class CircularIncludeError extends ConfigIncludeError {
 // ============================================================================
 
 /** Deep merge: arrays concatenate, objects merge recursively, primitives: source wins */
+// lyc: 深度合并两个值返回: 数组拼接 或 对象递归合并 或 原始数据: 取source值
 export function deepMerge(target: unknown, source: unknown): unknown {
+  // lyc: 如果两个都是数组则直接拼接返回
   if (Array.isArray(target) && Array.isArray(source)) {
     return [...target, ...source];
   }
+  // lyc: 如果两个都是纯对象则递归合并
   if (isPlainObject(target) && isPlainObject(source)) {
+    // lyc: 解构赋值, 复制target到result
     const result: Record<string, unknown> = { ...target };
     for (const key of Object.keys(source)) {
       if (isBlockedObjectKey(key)) {
         continue;
       }
+      /* lyc: 
+        递归合并result[key]和source[key], 
+        如果当前key在target和source中都存在则继续深度合并( 数组拼接 或 对象递归合并 或 原始数据: 取source值), 
+          例如: target[key] = [1, 2, 3], source[key] = [4, 5, 6], 合并后[key] = [1, 2, 3, 4, 5, 6]
+          例如: target[key] = { a: 1, b: 2 }, source[key] = { c: 3, d: 4 }, 合并后[key] = { a: 1, b: 2, c: 3, d: 4 }  
+          例如: target[key] = 1, source[key] = 2, 合并后[key] = 2
+        否则代表key在target中不存在,取source[key]
+      */
       result[key] = key in result ? deepMerge(result[key], source[key]) : source[key];
     }
     return result;
   }
+  // lyc: 如果target或source不是纯对象则直接返回source
   return source;
 }
 
@@ -105,18 +118,20 @@ class IncludeProcessor {
   }
 
   process(obj: unknown): unknown {
+    // lyc: 递归处理数组中的每个元素
     if (Array.isArray(obj)) {
       return obj.map((item) => this.process(item));
     }
-
+    // lyc: 不是数组 && 如果不是纯对象返回
     if (!isPlainObject(obj)) {
       return obj;
     }
 
+    // lyc: 不是数组 && 是纯对象 && 如果obj中不存在$include指令
     if (!(INCLUDE_KEY in obj)) {
       return this.processObject(obj);
     }
-
+    // lyc: 不是数组 && 是纯对象 && obj中存在$include指令
     return this.processInclude(obj);
   }
 
@@ -129,14 +144,19 @@ class IncludeProcessor {
   }
 
   private processInclude(obj: Record<string, unknown>): unknown {
+    // lyc: 返回obj的$include指令对应的值
     const includeValue = obj[INCLUDE_KEY];
+    // lyc: 返回obj中除了$include指令以外的所有键
     const otherKeys = Object.keys(obj).filter((k) => k !== INCLUDE_KEY);
+    // lyc: 解析$include指令对应的值
     const included = this.resolveInclude(includeValue);
 
+    // lyc: 代表obj只有一个属性且这个属性是$include指令, 直接返回解析后的内容(代表整个obj将被$include指令的内容替换)
     if (otherKeys.length === 0) {
       return included;
     }
 
+    // lyc: 如果解析后的内容不是纯对象: 兄弟键要求included后的内容是纯对象
     if (!isPlainObject(included)) {
       throw new ConfigIncludeError(
         "Sibling keys require included content to be an object",
@@ -145,18 +165,24 @@ class IncludeProcessor {
     }
 
     // Merge included content with sibling keys
+    // lyc: 合并included后的内容与其他兄弟键对应的内容
     const rest: Record<string, unknown> = {};
+    // lyc: 递归处理其他兄弟键对应的内容
     for (const key of otherKeys) {
       rest[key] = this.process(obj[key]);
     }
+    // lyc: 合并included后的内容与其他兄弟键对应的内容
     return deepMerge(included, rest);
   }
 
+  // lyc: 解析$include指令对应的值
   private resolveInclude(value: unknown): unknown {
+    // lyc: 如果是字符串则直接加载文件并返回
     if (typeof value === "string") {
       return this.loadFile(value);
     }
-
+    // lyc: 如果是数组则递归处理数组中的每个元素并合并返回
+    // lyc: 这代表数组中每个include的文件都会得到解析最后把他们合并返回, 如果有相同的键则后面的键会覆盖前面的键
     if (Array.isArray(value)) {
       return value.reduce<unknown>((merged, item) => {
         if (typeof item !== "string") {
@@ -178,23 +204,31 @@ class IncludeProcessor {
   private loadFile(includePath: string): unknown {
     const resolvedPath = this.resolvePath(includePath);
 
+    // lyc: 检查是否循环引用
     this.checkCircular(resolvedPath);
+    // lyc: 检查是否超过最大深度
     this.checkDepth(includePath);
 
+    // lyc: raw = 读取文件内容
     const raw = this.readFile(includePath, resolvedPath);
+    // lyc: parsed = 解析文件内容为JSON对象
     const parsed = this.parseFile(includePath, resolvedPath, raw);
 
     return this.processNested(resolvedPath, parsed);
   }
 
+  // lyc: 解析路径
   private resolvePath(includePath: string): string {
+    // lyc: 获得配置文件的目录地址
     const configDir = path.dirname(this.basePath);
+    // lyc: resolved = 如果includePath是绝对路径则直接返回, 否则认为includePath是相对路径返回configDir + includePath的路径地址
     const resolved = path.isAbsolute(includePath)
       ? includePath
       : path.resolve(configDir, includePath);
     const normalized = path.normalize(resolved);
 
     // SECURITY: Reject paths outside top-level config directory (CWE-22: Path Traversal)
+    // lyc: 安全检查路径(normalized)是否在配置文件目录(rootDir)下
     if (!isPathInside(this.rootDir, normalized)) {
       throw new ConfigIncludeError(
         `Include path escapes config directory: ${includePath} (root: ${this.rootDir})`,
@@ -203,6 +237,7 @@ class IncludeProcessor {
     }
 
     // SECURITY: Resolve symlinks and re-validate to prevent symlink bypass
+    // lyc: 安全检查路径(normalized)是否在配置文件目录(rootRealDir)下
     try {
       const real = fs.realpathSync(normalized);
       if (!isPathInside(this.rootRealDir, real)) {
@@ -216,6 +251,7 @@ class IncludeProcessor {
         throw err;
       }
       // File doesn't exist yet - normalized path check above is sufficient
+      // lyc: 如果文件不存在, 则直接返回normalized路径
     }
 
     return normalized;
@@ -270,6 +306,7 @@ class IncludeProcessor {
     }
   }
 
+  // lyc: 解析嵌套的include键对应的值
   private processNested(resolvedPath: string, parsed: unknown): unknown {
     const nested = new IncludeProcessor(resolvedPath, this.resolver, this.rootDir);
     nested.visited = new Set([...this.visited, resolvedPath]);
@@ -286,6 +323,7 @@ function safeRealpath(target: string): string {
   }
 }
 
+// lyc: 以带保护机制(防止逃离配置目录)的方式读取配置中的include文件
 export function readConfigIncludeFileWithGuards(params: IncludeFileReadParams): string {
   const ioFs = params.ioFs ?? fs;
   const maxBytes = params.maxBytes ?? MAX_INCLUDE_FILE_BYTES;
@@ -337,6 +375,7 @@ const defaultResolver: IncludeResolver = {
 /**
  * Resolves all $include directives in a parsed config object.
  */
+// lyc: 解析已解析配置对象中的所有$include指令(directives)。
 export function resolveConfigIncludes(
   obj: unknown,
   configPath: string,

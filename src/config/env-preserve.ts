@@ -33,6 +33,9 @@ function hasEnvVarRef(value: string): boolean {
  * - `${VAR}` → env value (returns null if missing)
  * - `$${VAR}` → literal `${VAR}` (escape sequence)
  */
+/* lyc: 解析template中的`${VAR}`环境变量引用(env[VAR])并返回
+$${VAR}代表其是一个字面量${VAR},不进行环境变量的解析, 即遇到$${VAR}解析为${VAR}
+*/
 function tryResolveString(template: string, env: NodeJS.ProcessEnv): string | null {
   const ENV_VAR_NAME = /^[A-Z_][A-Z0-9_]*$/;
   const chunks: string[] = [];
@@ -86,12 +89,22 @@ function tryResolveString(template: string, env: NodeJS.ProcessEnv): string | nu
  * @param env - Environment variables for verification
  * @returns A new config object with env var references restored where appropriate
  */
+/* lyc:
+根据parsed中环境变量引用(${VAR})来恢复incoming中对应的环境变量引用, 
+例如: parsed.attr1="path is ${path}", incoming.attr1="path is ~/usr/local", return.attr1=parsed.attr1="path is ${path}"
+对传入的配置(incoming)进行深度遍历，并在解析值匹配时，从预替换(parsed)解析后的配置中恢复 `$VAR` 引用。
+incoming: 即将写入的解析配置
+parsed: 预替换后的解析配置（来自磁盘上的当前文件）
+env: 环境变量快照（来自加载配置时）
+return: 一个新的配置对象，其中环境变量引用已适当恢复
+*/
 export function restoreEnvVarRefs(
   incoming: unknown,
   parsed: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): unknown {
   // If parsed has no env var refs at this level, return incoming as-is
+  // 如果parsed中没有环境变量引用, 则直接返回incoming
   if (parsed === null || parsed === undefined) {
     return incoming;
   }

@@ -1215,6 +1215,32 @@ function installPluginRuntimeDeps(params) {
   }
 }
 
+/** lyc:ai
+ * 分阶段处理捆绑插件的运行时依赖
+ * 
+ * 此函数为标记了 bundle.stageRuntimeDependencies=true 的插件
+ * 安装或复制其运行时依赖到 dist/extensions/{plugin}/node_modules/ 目录。
+ * 
+ * 处理流程：
+ * 1. 扫描 dist/extensions/ 目录下的所有插件
+ * 2. 检查插件是否需要运行时依赖（package.json.dependencies 或 optionalDependencies 存在）
+ * 3. 检查插件是否标记为需要分阶段处理运行时依赖（package.json.openclaw.bundle.stageRuntimeDependencies=true）
+ * 4. 计算依赖指纹，避免重复安装相同的依赖
+ * 5. 尝试从根目录 node_modules 复用已安装的依赖（如果版本兼容）
+ * 6. 如果无法复用，则独立安装依赖到插件的 node_modules 目录
+ * 7. 对安装的依赖进行清理，移除不需要的文件（如 .d.ts、测试文件等）
+ * 
+ * 这种设计确保每个插件都有其完整的运行时依赖，避免依赖冲突，
+ * 同时通过指纹机制优化构建性能，避免不必要的重复安装。
+ * 
+ * @param {Object} params - 配置参数对象
+ * @param {string} [params.cwd] - 当前工作目录
+ * @param {string} [params.repoRoot] - 仓库根目录，默认使用 cwd 或 process.cwd()
+ * @param {Function} [params.installPluginRuntimeDepsImpl] - 依赖安装实现函数，默认使用内部实现
+ * @param {number} [params.installAttempts] - 安装重试次数，默认为 3
+ * @param {Map} [params.stagedRuntimeDepPruneRules] - 依赖清理规则，默认使用内置规则
+ * @param {string[]} [params.stagedRuntimeDepGlobalPruneSuffixes] - 全局清理后缀，默认移除 .d.ts 和 .map 文件
+ */
 export function stageBundledPluginRuntimeDeps(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
   const installPluginRuntimeDepsImpl =

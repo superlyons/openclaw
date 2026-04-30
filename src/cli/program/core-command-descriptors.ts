@@ -3,6 +3,8 @@ import type { NamedCommandDescriptor } from "./command-group-descriptors.js";
 
 export type CoreCliCommandDescriptor = NamedCommandDescriptor;
 
+// lyc: 定义核心 CLI 命令描述符
+// lyc: 这些命令是 OpenClaw CLI 核心功能的基础, 用于配置、运行、管理 OpenClaw 系统
 const coreCliCommandCatalog = defineCommandDescriptorCatalog([
   {
     name: "crestodian",
@@ -102,6 +104,7 @@ const coreCliCommandCatalog = defineCommandDescriptorCatalog([
   },
 ] as const satisfies ReadonlyArray<CoreCliCommandDescriptor>);
 
+// lyc: 导出核心 CLI 命令描述对象{name, description, hasSubcommands}
 export const CORE_CLI_COMMAND_DESCRIPTORS = coreCliCommandCatalog.descriptors;
 
 export function getCoreCliCommandDescriptors(): ReadonlyArray<CoreCliCommandDescriptor> {

@@ -154,6 +154,17 @@ export function resolveCompatibilityHostVersion(
 // Single source of truth for the current OpenClaw version.
 // - Embedded/bundled builds: injected define or env var.
 // - Dev/npm builds: package.json.
+/* lyc: 当前OpenClaw版本的唯一权威信息来源: 
+  -嵌入式/打包构建：注入定义或环境变量。 
+  -Dev/npm构建：package.json
+*/
+/* lyc: 
+  当前 OpenClaw 版本, 优先级如下:
+  - 从注入的版本获取 __OPENCLAW_VERSION__
+  - 从 package.json或build-info.json 获取
+  - 从捆绑的版本获取 env.OPENCLAW_BUNDLED_VERSION
+  - 默认值为 "0.0.0"
+ */
 export const VERSION = resolveBinaryVersion({
   moduleUrl: import.meta.url,
   injectedVersion: typeof __OPENCLAW_VERSION__ === "string" ? __OPENCLAW_VERSION__ : undefined,

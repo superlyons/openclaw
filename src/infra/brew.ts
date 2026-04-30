@@ -19,6 +19,12 @@ function normalizePathValue(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/* lyc: 解析brew的路径目录, 
+  brew指的是: Homebrew和Linuxbrew; Homebrew是Mac上的软件包管理工具(ruby编写) Linuxbrew是Linux上的软件包管理工具
+  返回值:[env.HOMEBREW_PREFIX/bin, env.HOMEBREW_PREFIX/sbin, ~/.linuxbrew/bin, ~/.linuxbrew/sbin, 
+    /home/linuxbrew/.linuxbrew/bin, /home/linuxbrew/.linuxbrew/sbin, 
+    /opt/homebrew/bin, /usr/local/bin]
+*/
 export function resolveBrewPathDirs(opts?: {
   homeDir?: string;
   env?: NodeJS.ProcessEnv;

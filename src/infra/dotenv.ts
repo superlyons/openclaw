@@ -10,6 +10,7 @@ import {
   normalizeEnvVarKey,
 } from "./host-env-security.js";
 
+// lyc: 被阻止的工作区环境变量键列表
 const BLOCKED_WORKSPACE_DOTENV_KEYS = new Set([
   "ALL_PROXY",
   "ANTHROPIC_API_KEY",
@@ -77,7 +78,10 @@ const BLOCKED_WORKSPACE_DOTENV_KEYS = new Set([
 // Block endpoint redirection for any service without overfitting per-provider names.
 // `_HOMESERVER` covers Matrix's per-account scoped keys (MATRIX_<ACCOUNT>_HOMESERVER)
 // in addition to the bare MATRIX_HOMESERVER listed above.
+// lyc: 阻止任何服务的端点重定向，避免过度拟合每个提供者的名称
+// lyc: 被阻止的工作区环境变量后缀列表
 const BLOCKED_WORKSPACE_DOTENV_SUFFIXES = ["_API_HOST", "_BASE_URL", "_HOMESERVER"];
+// lyc: 被阻止的工作区环境变量前缀列表
 const BLOCKED_WORKSPACE_DOTENV_PREFIXES = [
   "ANTHROPIC_API_KEY_",
   "CLAWHUB_",
@@ -91,6 +95,7 @@ const BLOCKED_WORKSPACE_DOTENV_PREFIXES = [
   "OPENCLAW_UPDATE_",
 ];
 
+// lyc: 检查是否应该阻止工作区环境变量键
 function shouldBlockWorkspaceRuntimeDotEnvKey(key: string): boolean {
   return isDangerousHostEnvVarName(key) || isDangerousHostEnvOverrideVarName(key);
 }
@@ -104,6 +109,7 @@ function shouldBlockRuntimeDotEnvKey(key: string): boolean {
   return false;
 }
 
+// lyc: 检查是否应该阻止工作区环境变量键
 function shouldBlockWorkspaceDotEnvKey(key: string): boolean {
   const upper = key.toUpperCase();
   return (
@@ -124,6 +130,7 @@ type LoadedDotEnvFile = {
   entries: DotEnvEntry[];
 };
 
+// lyc: 读取.env环境变量文件, 并根据shouldBlockKey函数过滤掉被阻止的环境变量
 function readDotEnvFile(params: {
   filePath: string;
   shouldBlockKey: (key: string) => boolean;
@@ -155,6 +162,7 @@ function readDotEnvFile(params: {
   const entries: DotEnvEntry[] = [];
   for (const [rawKey, value] of Object.entries(parsed)) {
     const key = normalizeEnvVarKey(rawKey, { portable: true });
+    // lyc: 检查是否应该阻止环境变量键, 如果是则跳过
     if (!key || params.shouldBlockKey(key)) {
       continue;
     }
@@ -180,9 +188,11 @@ export function loadRuntimeDotEnvFile(filePath: string, opts?: { quiet?: boolean
   }
 }
 
+// lyc: 加载工作区的环境变量(.env)到process.env中, 过滤掉被阻止的环境变量
 export function loadWorkspaceDotEnvFile(filePath: string, opts?: { quiet?: boolean }) {
   const parsed = readDotEnvFile({
     filePath,
+    // lyc: 检查是否应该阻止工作区环境变量键的函数
     shouldBlockKey: shouldBlockWorkspaceDotEnvKey,
     quiet: opts?.quiet ?? true,
   });
@@ -197,18 +207,25 @@ export function loadWorkspaceDotEnvFile(filePath: string, opts?: { quiet?: boole
   }
 }
 
+// lyc: 加载解析后的环境变量文件到process.env中, 只设置process.env中不存在的环境变量, 
+// lyc: 并且每个环境变量键只能设置一次, 且后续的设置不会覆盖之前的设置, 但会计入conflicts冲突记录并打印警告信息
 function loadParsedDotEnvFiles(files: LoadedDotEnvFile[]) {
+  // lyc: 当前已存在的环境变量键集合
   const preExistingKeys = new Set(Object.keys(process.env));
   const conflicts = new Map<string, { keptPath: string; ignoredPath: string; keys: Set<string> }>();
   const firstSeen = new Map<string, { value: string; filePath: string }>();
 
   for (const file of files) {
     for (const { key, value } of file.entries) {
+      // lyc: 如果当前环境变量键key已存在, 则跳过
       if (preExistingKeys.has(key)) {
         continue;
       }
+      // lyc: 当前key在之前设置过, 即本次循环之前已设置过该环境变量键
+      // lyc: 如果key在之前设置过, 则后续的设置不会覆盖之前的设置, 但会计入conflicts冲突记录
       const previous = firstSeen.get(key);
       if (previous) {
+        // lyc: 当前value和之前设置的value不同, 则记录冲突
         if (previous.value !== value) {
           const conflictKey = `${previous.filePath}\u0000${file.filePath}`;
           const existing = conflicts.get(conflictKey);
@@ -224,13 +241,16 @@ function loadParsedDotEnvFiles(files: LoadedDotEnvFile[]) {
         }
         continue;
       }
+      // lyc: 当前key在之前未设置过, 则添加到firstSeen首次出现记录1中
       firstSeen.set(key, { value, filePath: file.filePath });
+      // lyc: 向process.env中添加当前环境变量键key和值value
       if (process.env[key] === undefined) {
         process.env[key] = value;
       }
     }
   }
 
+  // lyc: 遍历conflicts冲突记录, 并打印警告信息
   for (const conflict of conflicts.values()) {
     const keys = [...conflict.keys].toSorted();
     if (keys.length === 0) {
@@ -242,17 +262,23 @@ function loadParsedDotEnvFiles(files: LoadedDotEnvFile[]) {
   }
 }
 
+// lyc: 加载全局的环境变量(.env)到process.env中, 默认为~/.openclaw/.env和~/.config/openclaw/gateway.env
 export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvPath?: string }) {
   const quiet = opts?.quiet ?? true;
+  // lyc: 状态目录下的.env文件路径,~/.openclaw/.env或cwd()/.env
   const stateEnvPath = opts?.stateEnvPath ?? path.join(resolveConfigDir(process.env), ".env");
+  // lyc: 默认的状态目录下的.env文件路径,~/.openclaw/.env
   const defaultStateEnvPath = path.join(
     resolveRequiredHomeDir(process.env, os.homedir),
     ".openclaw",
     ".env",
   );
+  // lyc: 存在确定的非默认的状态目录下的.env文件路径, 即stateEnvPath!=defaultStateEnvPath
+  // lyc: true代表: 指定的.env文件(stateEnvPath)不是默认认为的.env文件(defaultStateEnvPath)
   const hasExplicitNonDefaultStateDir =
     process.env.OPENCLAW_STATE_DIR?.trim() !== undefined &&
     path.resolve(stateEnvPath) !== path.resolve(defaultStateEnvPath);
+  // lyc: 读取stateEnvPath的.env文件,并压入parsedFiles[0]中
   const parsedFiles = [
     readDotEnvFile({
       filePath: stateEnvPath,
@@ -260,7 +286,10 @@ export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvP
       quiet,
     }),
   ];
+  // lyc: 状态目录下的.env文件没有二义性, 加载gateway.env文件
+  // lyc: 即指定的.env文件(stateEnvPath)是默认认为的.env文件(defaultStateEnvPath), 则加载gateway.env文件
   if (!hasExplicitNonDefaultStateDir) {
+    // lyc: 读取~/.config/openclaw/gateway.env文件,并压入parsedFiles[1]中
     parsedFiles.push(
       readDotEnvFile({
         filePath: path.join(
@@ -275,9 +304,26 @@ export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvP
     );
   }
   const parsed = parsedFiles.filter((file): file is LoadedDotEnvFile => file !== null);
+  /* lyc: 加载parsed后的环境变量到process.env中
+  parsed = [
+    {
+      filePath: ~/.openclaw/.env 或 cwd()/.env 或 其他明确指定的.env文件路径,
+      entries: [
+        { key: "OPENCLAW_GATEWAY_PASSWORD", value: "123456" }, ...
+      ],
+    },
+    {
+      filePath: ~/.config/openclaw/gateway.env 仅当parsed[0].filePath=="/.openclaw/.env"时才会存在本元素, 代表没有二义性时才会加载gateway.env文件
+      entries: [
+        { key: "OPENCLAW_GATEWAY_PASSWORD", value: "123456" }, ...
+      ],
+    },
+  ]
+  */
   loadParsedDotEnvFiles(parsed);
 }
 
+// lyc: 加载环境变量, 即: 从.env文件加载环境变量到process.env中
 export function loadDotEnv(opts?: { quiet?: boolean }) {
   const quiet = opts?.quiet ?? true;
   const cwdEnvPath = path.join(process.cwd(), ".env");
@@ -285,5 +331,6 @@ export function loadDotEnv(opts?: { quiet?: boolean }) {
 
   // Then load global fallback: ~/.openclaw/.env (or OPENCLAW_STATE_DIR/.env),
   // without overriding any env vars already present.
+  // lyc: 加载全局后备环境变量： ~/.openclaw/.env (或 OPENCLAW_STATE_DIR/.env), 且不覆盖任何已存在的环境变量
   loadGlobalRuntimeDotEnvFiles({ quiet });
 }

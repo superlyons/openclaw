@@ -11,6 +11,7 @@ function asPluginRegistry(registry: RegistryState["activeRegistry"]): PluginRegi
 }
 
 const state: RegistryState = (() => {
+   // lyc: 将 globalThis 断言为一个扩展类型，该类型包含一个可选的 REGISTRY_STATE 属性
   const globalState = globalThis as typeof globalThis & {
     [PLUGIN_REGISTRY_STATE]?: RegistryState;
   };
@@ -88,6 +89,7 @@ export function setActivePluginRegistry(
   state.runtimeSubagentMode = runtimeSubagentMode;
 }
 
+// lyc: 获得当前活动的插件注册表
 export function getActivePluginRegistry(): PluginRegistry | null {
   return asPluginRegistry(state.activeRegistry);
 }

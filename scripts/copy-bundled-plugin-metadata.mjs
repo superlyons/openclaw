@@ -37,6 +37,8 @@ export function rewritePackageExtensions(entries) {
     });
 }
 
+// lyc: 收集插件的顶级公共表面入口, 即插件的入口文件: 以js,ts,cjs,cts,mjs,mts,d.ts结尾的文件
+// lyc: 但不包括config-api开头的文件, 也不包括文件名包含".test.", ".spec.", ".fixture.", ".snap"的文件
 function collectTopLevelPublicSurfaceEntries(pluginDir) {
   if (!fs.existsSync(pluginDir)) {
     return [];
@@ -307,6 +309,22 @@ function mergeGeneratedChannelConfigs(manifest, generatedChannelConfigs) {
  *   env?: NodeJS.ProcessEnv;
  * }} [params]
  */
+/** lyc:ai
+ * 复制捆绑插件的元数据到分发目录
+ * 
+ * 此函数处理 extensions/ 目录下的所有插件，将它们的元数据文件
+ * (openclaw.plugin.json 和 package.json) 复制到 dist/extensions/ 对应目录。
+ * 同时进行必要的重写和清理操作：
+ * - 处理插件声明的技能(skill)路径，将它们复制到专用目录
+ * - 重写 package.json 中的入口点路径（.ts/.mjs 等转为 .js）
+ * - 清理不需要的文件（如测试文件、配置API文件等）
+ * - 根据环境变量决定是否包含可选的捆绑集群
+ * 
+ * @param {Object} params - 配置参数对象
+ * @param {string} [params.cwd] - 当前工作目录
+ * @param {string} [params.repoRoot] - 仓库根目录，默认使用 cwd 或 process.cwd()
+ * @param {NodeJS.ProcessEnv} [params.env] - 环境变量对象，默认使用 process.env 
+ */
 export function copyBundledPluginMetadata(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
   const env = params.env ?? process.env;
@@ -322,19 +340,27 @@ export function copyBundledPluginMetadata(params = {}) {
     if (!dirent.isDirectory()) {
       continue;
     }
-
+    // lyc: 插件目录, 例如: /home/openclaw/extensions/${dirent.name}
     const pluginDir = path.join(extensionsRoot, dirent.name);
+    // lyc: 插件manifest文件路径, 例如: /home/openclaw/extensions/${dirent.name}/openclaw.plugin.json
     const manifestPath = path.join(pluginDir, "openclaw.plugin.json");
+    // lyc: 插件dist目录, 例如: /home/openclaw/dist/extensions/${dirent.name}
     const distPluginDir = path.join(distExtensionsRoot, dirent.name);
+    // lyc: 插件package.json文件路径, 例如: /home/openclaw/extensions/${dirent.name}/package.json
     const packageJsonPath = path.join(pluginDir, "package.json");
+    // lyc: 插件package.json文件内容
     const packageJson = fs.existsSync(packageJsonPath)
       ? JSON.parse(fs.readFileSync(packageJsonPath, "utf8"))
       : undefined;
+    // lyc: 收集插件的顶级公共表面入口
     const topLevelPublicSurfaceEntries = collectTopLevelPublicSurfaceEntries(pluginDir);
     if (!shouldCopyBundledPluginMetadata(dirent.name, env)) {
       removePathIfExists(distPluginDir);
       continue;
     }
+    // lyc: shouldBuildBundledCluster实现位置:scripts\lib\optional-bundled-clusters.mjs
+    // lyc: 检查是否应构建捆绑集群: 以下三种情况之一为true
+    // lyc: package.json.openclaw.install.npmSpec, env.OPENCLAW_INCLUDE_OPTIONAL_BUNDLED !== "0", optionalBundledClusters.includes(cluster)
     if (!shouldBuildBundledCluster(dirent.name, env, { packageJson })) {
       removePathIfExists(distPluginDir);
       continue;

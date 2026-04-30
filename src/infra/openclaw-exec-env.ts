@@ -8,6 +8,7 @@ export function markOpenClawExecEnv<T extends Record<string, string | undefined>
   };
 }
 
+// lyc: 确保在当前进程环境中设置 OPENCLAW_CLI 环境变量
 export function ensureOpenClawExecMarkerOnProcess(
   env: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {

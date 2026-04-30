@@ -4,6 +4,8 @@ import { isPrivateQaCliEnabled } from "./private-qa-cli.js";
 
 export type SubCliDescriptor = NamedCommandDescriptor;
 
+// lyc: 定义子 CLI 命令描述符
+// lyc: 这些命令是 OpenClaw CLI 子命令的基础, 用于执行更具体的任务
 const subCliCommandCatalog = defineCommandDescriptorCatalog([
   { name: "acp", description: "Agent Control Protocol tools", hasSubcommands: true },
   {
@@ -169,7 +171,7 @@ const subCliCommandCatalog = defineCommandDescriptorCatalog([
     hasSubcommands: false,
   },
 ] as const satisfies ReadonlyArray<SubCliDescriptor>);
-
+// lyc: 导出子 CLI 命令描述对象{name, description, hasSubcommands}
 export const SUB_CLI_DESCRIPTORS = subCliCommandCatalog.descriptors;
 
 export function getSubCliEntries(): ReadonlyArray<SubCliDescriptor> {
