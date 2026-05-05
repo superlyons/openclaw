@@ -52,7 +52,7 @@ export const routedCommands: RouteSpec[] = cliCommandCatalog
     ): entry is CliCommandCatalogEntry & { route: { id: keyof typeof routedCommandDefinitions | CliRoutedCommandId } } =>
       Boolean(entry.route),
   )
-  // lyc: 创建统一的路由执行类: match, loadPlugins, run{routedCommandDefinition.runParsedArgs&parseArgs}
+  // lyc: 创建统一的路由执行类: match, loadPlugins, canRun, run{routedCommandDefinition.parseArgs & runParsedArgs}
   .map((entry) =>
     createParsedRoute({
       entry,

@@ -76,6 +76,20 @@ async function runOneShot(
   });
 }
 
+/* lyc: 执行Crestodian核心调度器 
+runCrestodian的执行流程:
+1. 若opts.json为true：加载系统概览并输出JSON后退出
+2. 若opts.message有值：加载概览→格式化输出→执行单次命令（runOneShot）
+    runOneShot内部：先调resolveCrestodianOperation解析用户意图
+    (src/crestodian/dialogue.ts)，如果解析失败则调用AI助手规划器
+    (src/crestodian/assistant.ts::planCrestodianCommand)，
+    最后调用executeCrestodianOperation执行操作
+    (src/crestodian/operations.ts)
+3. 否则（裸根模式默认路径）：启动交互式TUI
+    (src/crestodian/tui-backend.ts::runCrestodianTui)
+    TUI后端基于OpenClaw的通用TUI框架(src/tui/tui.ts)
+    会话固定使用"crestodian" agent和"crestodian" session key
+*/
 export async function runCrestodian(
   opts: RunCrestodianOptions = {},
   runtime: RuntimeEnv = defaultRuntime,
@@ -85,6 +99,7 @@ export async function runCrestodian(
   用于 --json 标志场景，例如 openclaw onboard --modern --json
   */
   if (opts.json) {
+    // lyc: loadCrestodianOverview(): 加载系统概览(配置/Agent/网关/工具链)
     const overview = await (opts.loadOverview ?? loadCrestodianOverview)();
     writeRuntimeJson(runtime, overview);
     return;
@@ -92,8 +107,8 @@ export async function runCrestodian(
 
   /* lyc:ai
   路径2: 单次消息模式 - 有message参数时，先显示系统概览，再处理用户命令
-  用于 --message "status" 或 --non-interactive 场景
-  流程: 加载概览(带进度条) → 格式化输出 → runOneShot解析并执行命令
+  用于 openclaw crestodian --message "status" 或 openclaw onboard --modern --non-interactiv(此时message="overview") 场景
+  流程: 加载概览(带进度条) → 格式化输出概览 → runOneShot()解析并执行命令
   */
   if (opts.message?.trim()) {
     const overview = await withProgress(
@@ -105,6 +120,7 @@ export async function runCrestodian(
       },
       async () => await (opts.loadOverview ?? loadCrestodianOverview)(),
     );
+    // lyc: 以文本方式格式化输出关键的系统概览(loadCrestodianOverview()返回的overview)
     runtime.log((opts.formatOverview ?? formatCrestodianOverview)(overview));
     runtime.log("");
     await runOneShot(opts.message, runtime, opts);
@@ -113,7 +129,7 @@ export async function runCrestodian(
 
   /* lyc:ai
   路径3: 交互式TUI模式 - 加载完整的Crestodian对话界面
-  默认路径，裸根模式 `openclaw` 和 现代引导交互模式都走这里
+  默认路径，裸根模式 `openclaw` 和 现代引导交互模式(不带其他参数的) `openclaw onboard --modern` 都走这里 
   TUI后端实现: tui-backend.ts::runCrestodianTui
   基于OpenClaw通用TUI框架 src/tui/tui.ts
   */
@@ -129,6 +145,8 @@ export async function runCrestodian(
 
   const runInteractiveTui =
     opts.runInteractiveTui ?? (await import("./tui-backend.js")).runCrestodianTui;
+  // lyc: 加载完成, 停止进度条
   opts.onReady?.();
+  // lyc: 运行交互式TUI界面
   await runInteractiveTui(opts, runtime);
 }

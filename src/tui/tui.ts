@@ -502,6 +502,11 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     localBtwRunIds.clear();
   };
 
+  /* lyc: const client: TuiBackend = CrestodianTuiBackend | GatewayChatClient | EmbeddedTuiBackend
+    CrestodianTuiBackend: src\crestodian\tui-backend.ts
+    GatewayChatClient: src\tui\gateway-chat.ts
+    EmbeddedTuiBackend: src\tui\embedded-backend.ts
+  */
   const client: TuiBackend = opts.backend
     ? opts.backend
     : opts.local
@@ -937,6 +942,7 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
   };
   exitAwareClient.setRequestExitHandler?.(() => requestExit());
 
+  // lyc: handleCommand和sendMessage函数内部调用了client.sendChat(TuiBackend::sendChat()接口)
   const { handleCommand, sendMessage, openModelSelector, openAgentSelector, openSessionSelector } =
     createCommandHandlers({
       client,
@@ -970,12 +976,14 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     closeOverlay,
   });
   updateAutocompleteProvider();
+  // lyc: submitHander闭包函数通过handleCommand,sendMessage函数间接调用了client.sendChat(TuiBackend::sendChat()接口)
   const submitHandler = createEditorSubmitHandler({
     editor,
     handleCommand,
     sendMessage,
     handleBangLine: runLocalShellLine,
   });
+  // lyc: onSubmit事件触发时, 会间接调用了client.sendChat(TuiBackend::sendChat()接口)
   editor.onSubmit = createSubmitBurstCoalescer({
     submit: submitHandler,
     enabled: shouldEnableWindowsGitBashPasteFallback(),

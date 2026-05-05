@@ -89,6 +89,7 @@ function isCommanderParseExit(error: unknown): error is { exitCode: number } {
   );
 }
 
+// lyc: 确保CLI环境下配置了HTTP/S代理分发器
 async function ensureCliEnvProxyDispatcher(): Promise<void> {
   try {
     const { hasEnvHttpProxyAgentConfigured } = await import("../infra/net/proxy-env.js");
@@ -191,31 +192,20 @@ export async function runCli(argv: string[] = process.argv) {
     一个特殊的运行模式或后端服务,作为本地设置和修复聊天后端,帮助用户“守护”本地配置的助手角色
     */
 
-    /* lyc:ai
+    /* lyc:ai Crestodian(克雷斯托迪安)
     Crestodian是OpenClaw的本地守护/引导后端服务.
     它有两种互斥的激活路径:
     1. 裸根模式: 用户在终端执行裸命令 `openclaw`（无子命令），Crestodian作为默认入口
     2. 现代引导模式: 用户执行 `openclaw onboard --modern`，Crestodian替代传统向导流程
     核心职责: 提供系统概览 / 诊断修复 / 配置管理 / 网关控制 / Agent和模型管理
     */
-    // lyc: 检查是否应该启动Crestodian(克雷斯托迪安), shouldRunBareRootCrestodian 和 shouldRunModernOnboardCrestodian 是互斥的
-    /* lyc:ai
-    裸根模式判定: 命令行参数中没有子命令位置参数(commandPath.length === 0)
-    且不是帮助/版本请求. 见 run-main-policy.ts::shouldStartCrestodianForBareRoot
-    */
+
     // lyc: 裸根Crestodian" 模式
     const shouldRunBareRootCrestodian = shouldStartCrestodianForBareRoot(normalizedArgv);
-    /* lyc:ai
-    现代引导模式判定: 命令行参数中commandPath[0]==="onboard" 且包含 --modern 标志
-    且不是帮助/版本请求. 见 run-main-policy.ts::shouldStartCrestodianForModernOnboard
-    */
+
     // lyc: 现代Crestodian" 模式
     const shouldRunModernOnboardCrestodian = shouldStartCrestodianForModernOnboard(normalizedArgv);
-    /* lyc:ai
-    在启动Crestodian前，先确保全局HTTP代理分发器已配置好.
-    这是因为Crestodian内部可能调用AI模型API（用于自然语言解析用户意图），
-    如果用户环境配置了HTTP/S代理，需要提前激活undici全局代理分发器
-    */
+
     // lyc: 如果应该启动Crestodian(克雷斯托迪安), 则确保环境代理分发器已激活
     if (shouldRunBareRootCrestodian || shouldRunModernOnboardCrestodian) {
       await ensureCliEnvProxyDispatcher();
@@ -228,32 +218,16 @@ export async function runCli(argv: string[] = process.argv) {
       替代方案: 使用 `openclaw crestodian --message "status"` 执行单次命令
       */
       if (!process.stdin.isTTY || !process.stdout.isTTY) {
-        // lyc: Crestodian需要一个交互式TTY（文本终端）。使用`openclaw crestodian --message "status"`执行一个命令
+        // lyc: Crestodian需要一个交互式TTY（文本终端）。使用`openclaw crestodian --message "status"`执行单次命令
         console.error(
           'Crestodian needs an interactive TTY. Use `openclaw crestodian --message "status"` for one command.',
         );
         process.exitCode = 1;
         return;
       }
-      /* lyc:ai
-      动态导入Crestodian核心模块: `src/crestodian/crestodian.ts::runCrestodian`
-      runCrestodian的执行流程:
-        1. 若opts.json为true：加载系统概览并输出JSON后退出
-        2. 若opts.message有值：加载概览→格式化输出→执行单次命令（runOneShot）
-           runOneShot内部：先调resolveCrestodianOperation解析用户意图
-           (src/crestodian/dialogue.ts)，如果解析失败则调用AI助手规划器
-           (src/crestodian/assistant.ts::planCrestodianCommand)，
-           最后调用executeCrestodianOperation执行操作
-           (src/crestodian/operations.ts)
-        3. 否则（裸根模式默认路径）：启动交互式TUI
-           (src/crestodian/tui-backend.ts::runCrestodianTui)
-           TUI后端基于OpenClaw的通用TUI框架(src/tui/tui.ts)
-           会话固定使用"crestodian" agent和"crestodian" session key
-      */
       const { runCrestodian } = await import("../crestodian/crestodian.js");
       /* lyc:ai
       创建CLI进度指示器，显示 "Starting Crestodian…" 旋转动画.
-      实现位于 src/cli/progress.ts::createCliProgress
       支持多种后端：OSC进度协议 / @clack/prompts spinner / 纯文本行 / 日志行
       delayMs=0 表示立即显示，fallback="none" 表示非TTY时静默
       */
@@ -266,8 +240,7 @@ export async function runCli(argv: string[] = process.argv) {
       });
       /* lyc:ai
       progress状态管理：用progressStopped标志位防止重复调用stopProgress.
-      stopProgress作为onReady回调传给runCrestodian，在Crestodian完成初始化
-      （加载完概览数据、启动TUI前）时被调用，消除加载动画.
+      stopProgress作为onReady回调传给runCrestodian，在Crestodian完成初始化（加载完概览数据、启动TUI前）时被调用，消除加载动画.
       try/finally确保无论成功或失败都清理进度指示器
       */
       let progressStopped = false;
@@ -286,6 +259,7 @@ export async function runCli(argv: string[] = process.argv) {
       return;
     }
 
+    // lyc: 重点看上面 shouldRunBareRootCrestodian 中启动裸根Crestodian模式的内容即可, 现代引导模式的实现与裸根模式基本相同
     if (shouldRunModernOnboardCrestodian) {
       /* lyc:ai
       现代引导模式: `openclaw onboard --modern` 的Crestodian入口.
@@ -319,6 +293,7 @@ export async function runCli(argv: string[] = process.argv) {
     process.once("exit", () => {
       finalizeDebugProxyCapture();
     });
+    // lyc: 确保CLI环境下配置了HTTP/S代理分发器
     await ensureCliEnvProxyDispatcher();
     // lyc: 检查调试代理覆盖情况, 并在必要时警告(仅在新会话中输出警告)
     maybeWarnAboutDebugProxyCoverage();
@@ -336,6 +311,10 @@ export async function runCli(argv: string[] = process.argv) {
       - config-unset ：配置取消
       - models-list ：模型列表
       - models-status ：模型状态
+      - tasks-list ：任务列表 
+      - tasks-audit ：任务审核
+      - channels-list ：通道列表
+      - channels-status ：通道状态
       快速路径优势 ：
       - 不加载完整 Commander 程序
       - 直接执行命令逻辑

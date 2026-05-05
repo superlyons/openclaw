@@ -231,7 +231,19 @@ export function isDebugProxyGlobalFetchPatchInstalled(): boolean {
   const state = (globalThis as GlobalFetchPatchTarget)[DEBUG_PROXY_FETCH_PATCH_KEY];
   return Boolean(state && globalThis.fetch === state.patchedFetch);
 }
-// lyc: 初始化调试代理捕获, 用于记录http交流信息, 记录在调试代理捕获存储(DebugProxyCaptureStore)中
+/* lyc: 初始化调试代理捕获, 用于记录http交流信息, 记录在调试代理捕获存储(DebugProxyCaptureStore)中
+具体流程：
+记录会话信息：DebugProxyCaptureStore.upsertSession: 插入 或 更新 会话记录(capture_sessions表)
+安装 调试代理补丁: installDebugProxyGlobalFetchPatch 将为全局Fetch函数安装调 试代理的补丁, 
+    这个调试代理补丁会在每次调用全局Fetch函数时, 使用 DebugProxyCaptureStore中的方法 记录http交流信息，内容如下:
+        persistPayload: 记录请求和响应信息到blobDir目录下, 
+        recordEvent: 记录请求和响应事件和期间发生的异常(capture_events表)，记录内容会关联到blobDir目录下的文件
+当调用全局Fetch函数时实际调用的是 调试代理补丁 函数
+当openclaw进程退出时, 由finalizeDebugProxyCapture 函数处理 进行关闭操作：
+    更新会话记录(capture_sessions表)为结束，即设置endedAt为当前时间
+    卸载全局Fetch函数的 调试代理补丁 并 还原原始fetch函数引用
+    关闭调试代理捕获存储(DebugProxyCaptureStore)
+*/
 export function initializeDebugProxyCapture(mode: string, resolved?: DebugProxySettings): void {
   // lyc: 解析调试代理设置
   const settings = resolved ?? resolveDebugProxySettings();
@@ -267,7 +279,8 @@ export function finalizeDebugProxyCapture(resolved?: DebugProxySettings): void {
   closeDebugProxyCaptureStore();
 }
 
-// lyc: 记录http交流信息
+// lyc: 记录http交流信息, 
+// lyc: 记录请求和响应信息：将请求体和响应体存入blobDir目录下, 并记录请求和响应事件(capture_events表)中
 export function captureHttpExchange(params: {
   url: string;
   method: string;

@@ -754,6 +754,31 @@ observeConfigSnapshot 是配置健康监控的核心函数。
 - 每次调用 readConfigFileSnapshot() 时
 - 通过 finalizeReadConfigSnapshotInternalResult() 间接调用
 */
+/* lyc:
+流程如下：
+当前配置不存在或没有原始内容 退出
+current 当前配置指纹
+healthState=读取所有配置的健康条目(以配置完整路径索引)记录文件~/.openclaw/logs/config-health.json
+entry 当前配置的健康条目: healthState[当前配置文件(openclaw.json)完整路径]
+backupBaseline 备份基线指纹用于后续比较 = 
+  entry.lastKnownGood(当前配置的健康条目中最近一次确认正常的指纹) | openclaw.json.bak的配置指纹 | undefined
+以backupBaseline为基准检查current是否存在可疑的配置变化
+没有检查到可疑变化
+  当前配置（openclaw.json）是有效的 & (entry.lastKnownGood和current指纹不同 | 当前配置的健康条目存在最后观察到的可疑签名(lastObservedSuspiciousSignature))
+    更新healthState[当前配置完整路径]={当前配置指(lastKnownGood=current), 空的可疑签名(lastObservedSuspiciousSignature=null)
+    将healthState写入配置健康记录文件：~/.openclaw/logs/config-health.json
+  退出
+有可疑变化：
+suspiciousSignature 生成当前的可疑的签名
+如果 当前配置的健康条目的最后观察到的可疑签名和当前的可疑签名(suspiciousSignature)一样代表已经报告并处理过 退出
+没处理过
+备份当前配置(因为存在可疑变化,当前配置被认定为可疑的配置并将其备份)：openclaw.json.clobbered.YYYY-MM-DDTHH-MM-SS-sssZ
+log可疑配置警告
+追加配置观察审计记录，追加的文件：~/.openclaw/logs/config-audit.jsonl
+更新healthState[当前配置完整路径]={lastKnownGood=entry.lastKnownGood, lastObservedSuspiciousSignature=suspiciousSignature )
+  lastKnownGood为配置文件的最后已知完好的配置指纹，由于上面检测到可疑变化则代表当前配置指纹是不正确的，因此这里还是保留之前的指纹(entry.lastKnownGood), 并记录当前配置的可以变化签名(lastObservedSuspiciousSignature=suspiciousSignature)
+将healthState写入配置健康记录文件：~/.openclaw/logs/config-health.json
+*/
 async function observeConfigSnapshot(
   deps: Required<ConfigIoDeps>,
   snapshot: ConfigFileSnapshot,

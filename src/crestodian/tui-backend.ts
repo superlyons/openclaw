@@ -1,14 +1,5 @@
 /* lyc:ai
-Crestodian TUI后端 —— 实现OpenClaw的TuiBackend接口，为Crestodian提供交互式终端用户界面
-核心流程:
-1. runCrestodianTui() 创建CrestodianTuiBackend实例 → 调用 runTui() 启动TUI
-2. 用户输入通过 sendChat() → resolveReply() 处理:
-   a. 有pending操作: 检查用户是否说"yes"确认→执行/跳过
-   b. 无pending: 调resolveCrestodianOperation解析意图→executeCrestodianOperation执行
-      - 若操作是open-tui: 退出Crestodian，切换到用户的agent TUI(handoff)
-      - 若操作是持久性的(config-set/model切换等): 暂存到pending，询问用户确认
-      - 否则直接执行，返回结果文本
-3. 会话固定使用"crestodian" agent和session key，消息历史管理在本地的messages[]中
+Crestodian TUI Backend —— 实现OpenClaw的TuiBackend接口，为Crestodian提供交互式终端用户界面
 */
 import { randomUUID } from "node:crypto";
 import type { SessionsPatchParams, SessionsPatchResult } from "../gateway/protocol/index.js";
@@ -138,6 +129,7 @@ class CrestodianTuiBackend implements TuiBackend {
     // The enclosing TUI owns terminal shutdown; Crestodian has no transport to close.
   }
 
+  // lyc: 发送聊天消息
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
     const runId = opts.runId ?? randomUUID();
     const text = opts.message.trim();
@@ -277,6 +269,7 @@ class CrestodianTuiBackend implements TuiBackend {
     });
   }
 
+  // lyc: 处理回复
   private async respond(runId: string, sessionKey: string, text: string): Promise<void> {
     try {
       const reply = await this.resolveReply(text);
@@ -286,7 +279,9 @@ class CrestodianTuiBackend implements TuiBackend {
     }
   }
 
+  // lyc: 解析回复并执行操作, 最后返回结果文本
   private async resolveReply(text: string): Promise<string> {
+    // lyc: 若有pending操作, 则先确认用户是否允许执行
     if (this.pending) {
       if (isYes(text)) {
         const pending = this.pending;
@@ -303,14 +298,20 @@ class CrestodianTuiBackend implements TuiBackend {
     }
 
     const capture = createCaptureRuntime();
+    // lyc: 解析用户意图返回明确的操作
     const operation = await resolveCrestodianOperation(text, capture, this.opts);
 
+    // lyc: 若操作是open-tui, 设置handoff=open-tui操作 并退出CrestodianTUI(即当前TUI CrestodianTui)
+    // 如果是在runCrestodianTui调用上下文中, 则会切换到用户的AgentTUI(handoff), 在AgentTUI中通过"/crestodian"还能返回CrestodianTUI
     if (operation.kind === "open-tui") {
       this.handoff = operation;
+      // lyc: 请求退出CrestodianTUI(即当前TUI CrestodianTui), 在如果是在runCrestodianTui调用上下文中runTui()会返回
       queueMicrotask(() => this.requestExit?.());
+      // lyc: 即将打开你的常规代理TUI。在那里使用/crestodian来返回。
       return "Opening your normal agent TUI. Use /crestodian there to come back.";
     }
 
+    // lyc: 若操作是持久性的(config-set/model切换等), 即涉及到系统配置的改变, 暂存到pending，询问用户确认
     if (isPersistentCrestodianOperation(operation) && !this.opts.yes) {
       this.pending = operation;
       await executeCrestodianOperation(operation, capture, {
@@ -320,10 +321,13 @@ class CrestodianTuiBackend implements TuiBackend {
       return [capture.read(), approvalQuestion(operation)].filter(Boolean).join("\n\n");
     }
 
+    // lyc: 若操作不是持久性的, 则直接执行
     await executeCrestodianOperation(operation, capture, {
       approved: this.opts.yes === true || !isPersistentCrestodianOperation(operation),
       deps: this.opts.deps,
     });
+
+    // lyc: 获取执行结果文本
     const reply = capture.read();
     if (operation.kind === "none" && reply.includes("Bye.")) {
       queueMicrotask(() => this.requestExit?.());
@@ -332,12 +336,28 @@ class CrestodianTuiBackend implements TuiBackend {
   }
 }
 
-/* lyc:ai
-Crestodian TUI入口函数:
+/* lyc:ai CrestodianTUI入口函数
+核心流程:
 1. 无限循环(for(;;)): 加载系统概览 → 创建CrestodianTuiBackend → 调用runTui启动TUI
-2. TUI退出后检查handoff: 如果用户说了"talk to agent"等，执行handoff操作
-   (open-tui)退出循环，回到正常agent TUI；否则直接退出
-3. nextInput: 支持跨TUI循环传递下一条用户消息
+2. 用户输入通过 CrestodianTuiBackend.sendChat()发送聊天 -> this.respond()回应 -> this.resolveReply()处理答复 
+CrestodianTuiBackend.resolveReply()处理流程:
+   a. 有pending操作: 检查用户是否说"yes"确认 → 执行/跳过
+   b. 无pending: 调 resolveCrestodianOperation 解析意图 → executeCrestodianOperation 执行
+      - 若操作是open-tui(例如用户说了"talk to agent"等意图): 退出CrestodianTUI(即当前TUI CrestodianTui)后，切换到用户的AgentTUI(handoff) 
+          CrestodianTUI是配置管理界面, 使用的是本页实现的CrestodianTuiBackend，作为前端接口
+          AgentTUI是用户真正的工作界面, 使用GatewayChatClient|EmbeddedTuiBackend, 作为前端接口
+      - 若操作是持久性的(config-set/model切换等): 暂存到pending，询问用户确认
+      - 否则直接执行，返回结果文本
+3. 会话固定使用"crestodian" agent和session key，消息历史管理在本地的messages[]中
+
+runTui:
+runTui 是 OpenClaw 通用 TUI 框架的核心渲染函数。它来自 src/tui/tui.ts ，基于 @mariozechner/pi-tui 库。
+它做的事情是：
+- 创建一个全屏终端 UI（header + 聊天日志 + 状态栏 + footer + 输入编辑器）
+- 接收一个 TuiBackend 作为参数 —— 这个 backend 决定了这个 TUI "跟谁聊天"
+- 进入自己的事件循环处理用户输入、联网事件、重连等等
+- 只有当内部条件触发 exit 时才会返回 （用户按 Ctrl+C 两次、断连、或者 backend 主动调用 requestExit() ）
+你可以把它理解为一个"终端 UI 壳" —— 壳是一样的，但里面装的内容（backend）不同。
 */
 export async function runCrestodianTui(
   opts: CrestodianTuiOptions,
@@ -348,6 +368,7 @@ export async function runCrestodianTui(
     const overview = await loadOverviewForTui(opts);
     const backend = new CrestodianTuiBackend(opts, formatCrestodianStartupMessage(overview));
     const runTui = opts.runTui ?? defaultRunTui;
+    // lyc: 启动TUI, 使用CrestodianTuiBackend作为backend, 即由谁来处理用户输入和输出
     await runTui({
       local: true,
       session: CRESTODIAN_SESSION_KEY,
@@ -362,11 +383,39 @@ export async function runCrestodianTui(
     if (!handoff) {
       return;
     }
+    /* lyc: 执行handoff操作, 在当前上下文中一定是open-tui操作, 内部会调用第二个 runTui 来启动AgentTUI
+      executeCrestodianOperation()中处理open-tui操作, 会启动一个AgentTUI:
+        当用户在 AgentTUI 中输入 /crestodian fix gateway 回车后 触发onSubmit事件:
+          因为以"/"开头, 需调用handleCommand()处理, 内部会调用:
+            requestExit({
+                exitReason: "return-to-crestodian",
+                crestodianMessage: "fix gateway"
+              }), 
+          这会导致AgentTUI退出并返回{exitReason: "return-to-crestodian", crestodianMessage: "fix gateway"},
+        executeCrestodianOperation返回{applied: false, nextInput: "fix gateway"}
+      因此result = {applied: false, nextInput: "fix gateway"}
+      src/tui/tui.ts:
+      505行左右: const client: TuiBackend = CrestodianTuiBackend | GatewayChatClient | EmbeddedTuiBackend
+      940行左右: const { handleCommand, sendMessage, ... } = createCommandHandlers({ client, ... })
+        src\tui\tui-command-handlers.ts:
+          616行左右: const sendMessage = async (text: string) => { ... await client.sendChat(...) ... }
+                    这里会调用TuiBackend::sendChat()接口
+          275行左右: const handleCommand = async (raw: string) => { ... await sendMessage(raw) ... }
+                    处理的命令: help, auth, gateway-status, agent, agents, context, crestodian, session, sessions, model, models, think, verbose, trace, fast, reasoning, usage, elevated, activation, new, reset, abort, settings, exit, quit
+                    context命令调用openContextModeSelector()(其内部调用了sendMessage()) 或 sendMessage(), 未知命令会调用sendMessage()
+          166行左右: openContextModeSelector 方法会调用sendMessage()
+      973行左右: submitHandler = createEditorSubmitHandler({ ..., handleCommand, sendMessage, ... })
+                createEditorSubmitHandler返回一个函数, 当用户输入以"/"开头时调用handleCommand(), 否则调用sendMessage()
+      979行左右: editor.onSubmit = createSubmitBurstCoalescer({ submit: submitHandler, ... });
+    */
     const result = await executeCrestodianOperation(handoff, runtime, {
       approved: true,
       deps: opts.deps,
     });
+    // lyc: 用户在 AgentTUI 中输入 /crestodian fix gateway 后会推出AgentTUI, result = {applied: false, nextInput: "fix gateway"}
     nextInput = result.nextInput;
+    // lyc: 若handoff操作没有传递下一条用户消息, 则直接退出, 
+    // lyc: 否则继续循环, 进入CrestodianTui界面处理下一条用户消息
     if (!nextInput?.trim()) {
       return;
     }

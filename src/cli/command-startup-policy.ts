@@ -63,7 +63,7 @@ export function resolveCliStartupPolicy(params: {
           suppressDoctorStdout,
         })
       : false,
-    // lyc: 是否 加载插件 例如: 命令策略中loadPlugins值为always 或 loadPlugins值为text-only且jsonOutputMode为false
+    // lyc: 是否 加载插件 例如: 命令策略中loadPlugins值为always 或 loadPlugins值为text-only且jsonOutputMode为false, 则返回true
     loadPlugins: shouldLoadPluginsForCommandPath({
       commandPath: params.commandPath,
       jsonOutputMode: params.jsonOutputMode,

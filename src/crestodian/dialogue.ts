@@ -41,6 +41,7 @@ export async function resolveCrestodianOperation(
   opts: CrestodianDialogueOptions,
 ): Promise<CrestodianOperation> {
   const operation = parseCrestodianOperation(input);
+  // lyc: 是否需要调用AI助手, 不需要则返回解析结果operation
   if (!shouldAskAssistant(input, operation)) {
     return operation;
   }
@@ -58,6 +59,7 @@ export async function resolveCrestodianOperation(
   return planned;
 }
 
+// lyc: 是否应该调用AI助手
 function shouldAskAssistant(input: string, operation: CrestodianOperation): boolean {
   if (operation.kind !== "none") {
     return false;

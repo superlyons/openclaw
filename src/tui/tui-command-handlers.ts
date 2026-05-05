@@ -271,6 +271,8 @@ export function createCommandHandlers(context: CommandHandlerContext) {
     tui.requestRender();
   };
 
+  // lyc: 关注如下命令: help, auth, gateway-status, agent, agents, context, crestodian, session, sessions, model, models, think, verbose, trace, fast, reasoning, usage, elevated, activation, new, reset, abort, settings, exit, quit, sendMessage()
+  // lyc: 通过sendMessage和openSelector函数间接调用了client.sendChat(TuiBackend::sendChat()接口)
   const handleCommand = async (raw: string) => {
     const { name, args } = parseCommand(raw);
     if (!name) {
@@ -357,8 +359,10 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       case "context":
         if (!args) {
+          // lyc: 函数内会调用sendMessage函数(TuiBackend::sendChat()接口)
           openContextModeSelector();
         } else {
+          // lyc: sendMessage函数内部调用了client.sendChat(TuiBackend::sendChat()接口)
           await sendMessage(raw);
         }
         break;
@@ -606,12 +610,15 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         requestExit();
         break;
       default:
+        // lyc: sendMessage函数内部调用了client.sendChat(TuiBackend::sendChat()接口)
         await sendMessage(raw);
         break;
     }
     tui.requestRender();
   };
 
+  // lyc: 调用了client.sendChat(TuiBackend::sendChat()接口)
+  // lyc: 发送消息到当前会话
   const sendMessage = async (text: string) => {
     if (!state.isConnected) {
       chatLog.addSystem(

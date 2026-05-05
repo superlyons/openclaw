@@ -187,6 +187,7 @@ export function maybeWarnAboutDebugProxyCoverage(
     return;
   }
   const sessionKey = `${settings.sessionId}:${settings.proxyUrl ?? ""}`;
+  // lyc: 检查是否已警告过当前会话
   if (warnedCoverageSessionKey === sessionKey) {
     return;
   }

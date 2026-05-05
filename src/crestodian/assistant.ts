@@ -61,8 +61,8 @@ export type CrestodianLocalRuntimePlannerDeps = {
 
 /* lyc:ai
 AI规划器主入口 —— 两级策略:
-1. 先尝试planCrestodianCommandWithConfiguredModel: 用用户配置的模型推理(快速、准确)
-2. 失败则回退到planCrestodianCommandWithLocalRuntime: 用本地runtime/CLI工具推理
+1. 先尝试 planCrestodianCommandWithConfiguredModel: 用用户配置的模型推理(快速、准确)
+2. 失败则回退到 planCrestodianCommandWithLocalRuntime: 用本地runtime/CLI工具推理
 返回CrestodianAssistantPlan(command+reply+modelLabel) 或 null(规划失败)
 */
 export async function planCrestodianCommand(params: {

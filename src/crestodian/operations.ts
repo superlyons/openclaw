@@ -487,6 +487,32 @@ Crestodian操作执行器 —— 根据CrestodianOperation的kind分发到对应
 - setup: 引导式初始化设置
 返回CrestodianOperationResult: {applied, exitsInteractive?, message?, nextInput?}
 */
+
+/* lyc: executeCrestodianOperation函数中处理open-tui操作逻辑(逻辑来自src\crestodian\tui-backend.ts)
+executeCrestodianOperation()中处理open-tui操作, 会启动一个AgentTUI:
+  当用户在 AgentTUI 中输入 /crestodian fix gateway 回车后 触发onSubmit事件:
+    因为以"/"开头, 需调用handleCommand()处理, 内部会调用:
+      requestExit({
+          exitReason: "return-to-crestodian",
+          crestodianMessage: "fix gateway"
+        }), 
+    这会导致AgentTUI退出并返回{exitReason: "return-to-crestodian", crestodianMessage: "fix gateway"},
+  executeCrestodianOperation返回{applied: false, nextInput: "fix gateway"}
+因此result = {applied: false, nextInput: "fix gateway"}
+src/tui/tui.ts:
+505行左右: const client: TuiBackend = CrestodianTuiBackend | GatewayChatClient | EmbeddedTuiBackend
+940行左右: const { handleCommand, sendMessage, ... } = createCommandHandlers({ client, ... })
+  src\tui\tui-command-handlers.ts:
+    616行左右: const sendMessage = async (text: string) => { ... await client.sendChat(...) ... }
+              这里会调用TuiBackend::sendChat()接口
+    275行左右: const handleCommand = async (raw: string) => { ... await sendMessage(raw) ... }
+              处理的命令: help, auth, gateway-status, agent, agents, context, crestodian, session, sessions, model, models, think, verbose, trace, fast, reasoning, usage, elevated, activation, new, reset, abort, settings, exit, quit
+              context命令调用openContextModeSelector()(其内部调用了sendMessage()) 或 sendMessage(), 未知命令会调用sendMessage()
+    166行左右: openContextModeSelector 方法会调用sendMessage()
+973行左右: submitHandler = createEditorSubmitHandler({ ..., handleCommand, sendMessage, ... })
+          createEditorSubmitHandler返回一个函数, 当用户输入以"/"开头时调用handleCommand(), 否则调用sendMessage()
+979行左右: editor.onSubmit = createSubmitBurstCoalescer({ submit: submitHandler, ... });
+*/
 export async function executeCrestodianOperation(
   operation: CrestodianOperation,
   runtime: RuntimeEnv,

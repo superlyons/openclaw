@@ -602,6 +602,37 @@ function persistClobberedConfigSnapshotSync(params: {
   }
 }
 
+/* lyc: 尝试修复可疑的配置文件, (从configPath+".bak"恢复)
+如果configPath的配置文件发生错误则从configPath+".bak"恢复|覆盖(configPath)并返回恢复后的{raw,parsed}, 否则原封返回{params.raw, params.parsed}
+流程如下：
+current 当前配置指纹 (configPath)
+healthState=读取所有配置的健康条目(以配置完整路径索引)记录文件~/.openclaw/logs/config-health.json
+entry 当前配置的健康条目: healthState[当前配置文件(openclaw.json)完整路径]
+backupPath 当前配置的备份文件完整路径(configPath+".bak")
+backupBaseline 备份基线指纹用于后续比较 = 
+  entry.lastKnownGood(当前配置的健康条目中最近一次确认正常的指纹) | openclaw.json.bak的配置指纹 | undefined
+recoveryContext 获得恢复上下文：null | { suspicious, suspiciousSignature }
+  suspicious=以backupBaseline为基准检查current存在哪些可疑的配置变化
+  如果这些可疑的配置变化不是我们关注的则 返回 null
+  如果是我们关注的则：
+    为当前配置(current)生成 suspiciousSignature 可疑签名
+    如果当前配置的健康条目的最后观察到的可疑签名(entry.lastObservedSuspiciousSignature)和当前的可疑签名(suspiciousSignature)一样代表已经恢复过
+      返回 null
+    返回 { suspicious, suspiciousSignature }
+如果recoveryContext=null 原封返回, 返回 {params.raw, params.parsed}
+从 recoveryContext 获得可疑列表(suspicious)和可疑签名(suspiciousSignature)
+backupRaw = backupPath文件内容，如果不存在 原封返回, 返回 {params.raw, params.parsed}
+backupParsed = json5.parse(backupRaw), 如果json解析失败 原封返回, 返回 {params.raw, params.parsed}
+如果 backupBaseline=undefined 或 属性gatewayMode=false  原封返回, 返回 {params.raw, params.parsed}
+clobberedPath=持久化已损坏配置快照并返回它的路径，configPath.clobbered.YYYY-MM-DDTHH-MM-SS-sssZ
+从备份恢复当前配置，即 copy backupPath configPath
+输出警告信息：配置已从备份中自动恢复：configPath (suspicious.join(", "))
+追加配置观察审计记录(包括current,suspicious,lastKnownGood,backupBaseline,clobberedPath等)，追加的文件：~/.openclaw/logs/config-audit.jsonl
+更新healthState[当前配置完整路径]={lastKnownGood=entry.lastKnownGood, lastObservedSuspiciousSignature=suspiciousSignature )
+  lastKnownGood为配置文件的最后已知完好的配置指纹，由于上面检测到可疑变化则代表当前配置指纹是不正确的，因此这里还是保留之前的指纹(entry.lastKnownGood), 并记录当前配置的可以变化签名(lastObservedSuspiciousSignature=suspiciousSignature)
+将healthState写入配置健康记录文件：~/.openclaw/logs/config-health.json
+return {raw: backupRaw, parsed: backupParsed}
+*/
 export async function maybeRecoverSuspiciousConfigRead(params: {
   deps: ObserveRecoveryDeps;
   configPath: string;
