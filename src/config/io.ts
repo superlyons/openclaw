@@ -1324,6 +1324,7 @@ type LegacyMigrationResolution = {
   sourceLegacyIssues: LegacyConfigIssue[];
 };
 
+// lyc: 解析配置文件中的包含指令, 并返回解析后的配置对象。
 function resolveConfigIncludesForRead(
   parsed: unknown,
   configPath: string,
@@ -1332,6 +1333,7 @@ function resolveConfigIncludesForRead(
   return resolveConfigIncludes(parsed, configPath, {
     readFile: (candidate) => deps.fs.readFileSync(candidate, "utf-8"),
     readFileWithGuards: ({ includePath, resolvedPath, rootRealDir }) =>
+      // 读取包含文件, 并应用边界路径解析, 并返回解析后的文件内容。
       readConfigIncludeFileWithGuards({
         includePath,
         resolvedPath,
@@ -1342,24 +1344,30 @@ function resolveConfigIncludesForRead(
   });
 }
 
+// lyc: 解析配置文件中的环境变量引用, 并返回解析后的配置对象。
 function resolveConfigForRead(
   resolvedIncludes: unknown,
   env: NodeJS.ProcessEnv,
 ): ConfigReadResolution {
   // Apply config.env to process.env BEFORE substitution so ${VAR} can reference config-defined vars.
+  // lyc: 在替换环境变量引用之前，将config.env应用到process.env中，这样${VAR}就可以引用配置中定义的变量。
   if (resolvedIncludes && typeof resolvedIncludes === "object" && "env" in resolvedIncludes) {
     applyConfigEnvVars(resolvedIncludes as OpenClawConfig, env);
   }
 
   // Collect missing env var references as warnings instead of throwing,
   // so non-critical config sections with unset vars don't crash the gateway.
+  // lyc: 将缺失的环境变量引用作为警告收集，而不是抛出错误，因此，包含未设置变量的非关键配置部分不会导致网关崩溃。
   const envWarnings: EnvSubstitutionWarning[] = [];
   return {
+    // lyc: 解析后的配置对象, 包含环境变量引用替换后的结果。
     resolvedConfigRaw: resolveConfigEnvVars(resolvedIncludes, env, {
       onMissing: (w) => envWarnings.push(w),
     }),
     // Capture env snapshot after substitution for write-time ${VAR} restoration.
+    // lyc: 在替换环境变量引用之后，捕获环境变量快照，用于写入时恢复${VAR}引用。
     envSnapshotForRestore: { ...env } as Record<string, string | undefined>,
+    // lyc: 环境变量引用解析警告列表, 即配置文件中引用的无法解析的环境变量警告
     envWarnings,
   };
 }

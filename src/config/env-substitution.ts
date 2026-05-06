@@ -40,6 +40,7 @@ type EnvToken =
   | { kind: "escaped"; name: string; end: number }
   | { kind: "substitution"; name: string; end: number };
 
+// lyc: 解析环境变量令牌
 function parseEnvTokenAt(value: string, index: number): EnvToken | null {
   if (value[index] !== "$") {
     return null;
@@ -49,11 +50,17 @@ function parseEnvTokenAt(value: string, index: number): EnvToken | null {
   const afterNext = value[index + 2];
 
   // Escaped: $${VAR} -> ${VAR}
+  // lyc: 逃脱: 如果是$${VAR}这种情况, value[index]="$", next="$", afterNext="{"
   if (next === "$" && afterNext === "{") {
+    // lyc: start指向$${VAR}中的V
     const start = index + 3;
+    // lyc: end指向$${VAR}中的}
     const end = value.indexOf("}", start);
+    // lyc: 如果end不是-1, 则说明$${VAR}中的}是匹配的
     if (end !== -1) {
+      // lyc: 提取$${VAR}中的VAR
       const name = value.slice(start, end);
+      // lyc: 如果VAR符合环境变量名的规范, 则返回一个EnvToken对象
       if (ENV_VAR_NAME_PATTERN.test(name)) {
         return { kind: "escaped", name, end };
       }
@@ -61,6 +68,7 @@ function parseEnvTokenAt(value: string, index: number): EnvToken | null {
   }
 
   // Substitution: ${VAR} -> value
+  // lyc: 替换: 如果是${VAR}这种情况, value[index]="$", next="{", afterNext="V"
   if (next === "{") {
     const start = index + 2;
     const end = value.indexOf("}", start);
@@ -85,6 +93,7 @@ export type SubstituteOptions = {
   onMissing?: (warning: EnvSubstitutionWarning) => void;
 };
 
+// lyc: 替换字符串中的环境变量引用
 function substituteString(
   value: string,
   env: NodeJS.ProcessEnv,
@@ -134,6 +143,7 @@ function substituteString(
   return chunks.join("");
 }
 
+// lyc: 检查字符串是否包含环境变量引用
 export function containsEnvVarReference(value: string): boolean {
   if (!value.includes("$")) {
     return false;
@@ -145,6 +155,7 @@ export function containsEnvVarReference(value: string): boolean {
       continue;
     }
 
+    // lyc: 解析环境变量令牌, 逃脱$${VAR}, 替换${VAR}
     const token = parseEnvTokenAt(value, i);
     if (token?.kind === "escaped") {
       i = token.end;
@@ -194,6 +205,13 @@ function substituteAny(
  * @returns The config object with env vars substituted
  * @throws {MissingEnvVarError} If a referenced env var is not set or empty (unless `onMissing` is set)
  */
+/* lyc: 在配置值中解析`${VAR_NAME}`环境变量引用。
+@param obj - 解析后的配置对象（经过JSON5解析和$include解析后）
+@param env - 用于替换的环境变量（默认为process.env）
+@param opts - 选项：`onMissing`回调函数，用于收集警告而不是抛出错误
+@returns 替换环境变量后的配置对象
+@throws {MissingEnvVarError} 如果引用的环境变量未设置或为空（除非设置了`onMissing`）
+*/
 export function resolveConfigEnvVars(
   obj: unknown,
   env: NodeJS.ProcessEnv = process.env,

@@ -96,29 +96,35 @@ export async function resolveBoundaryPath(
   return: {
     absolutePath: context.absolutePath(params.absolutePath)
     rootPath: context.rootPath(params.rootPath)
-    rootCanonicalPath: context.rootCanonicalPath(params.rootCanonicalPath 或 params.rootPath的规范路径)
-    canonicalPath: context.canonicalOutsideLexicalPath(absolutePath的规范路径(outsideLexicalCanonicalPath) 或 absolutePath路径)
-            内部: state.canonicalCursor: 以 rootCanonicalPath 为基础 + rootPath 到 absolutePath 的规范化路径(解析符号链接)地址
-    relativePath: context.rootCanonicalPath到context.canonicalOutsideLexicalPath的相对路径
-            内部: context.rootCanonicalPath 到 state.canonicalCursor 的相对路径
+    rootCanonicalPath: context.rootCanonicalPath(params.rootCanonicalPath绝对路径 或 params.rootPath的规范的绝对路径)
+    canonicalPath: context.canonicalOutsideLexicalPath(absolutePath的规范的绝对路径(outsideLexicalCanonicalPath) 或 absolutePath路径)
+                内部: state.canonicalCursor: 以 rootCanonicalPath 为基础 追加 rootPath 到 absolutePath 的相对路径, 在进行规范化路径(解析符号链接)解析后的绝对地址
+    relativePath: context.rootCanonicalPath 到 context.canonicalOutsideLexicalPath 的相对路径
+                内部: context.rootCanonicalPath 到 state.canonicalCursor 的相对路径
     exists: context.absolutePath是否存在
     kind: context.absolutePath的文件类型file|directory|symlink|other
   }
 */
 export function resolveBoundaryPathSync(params: ResolveBoundaryPathParams): ResolvedBoundaryPath {
+  // lyc: rootPath, absolutePath 是绝对路径, 入参是相对路径, 则需要先转换为绝对路径
   const rootPath = path.resolve(params.rootPath);
   const absolutePath = path.resolve(params.absolutePath);
-  // lyc: 确定根目录的规范路径（Canonical Path）,  rootCanonicalPath 是 rootPath的规范的路径 或 入参rootCanonicalPath
+  // lyc: 确定根目录的规范路径（Canonical Path）,  rootCanonicalPath = 入参rootCanonicalPath的绝对路径 或 rootPath的规范的绝对路径
   const rootCanonicalPath = params.rootCanonicalPath
     ? path.resolve(params.rootCanonicalPath)
     : resolvePathViaExistingAncestorSync(rootPath);
-  /* lyc:
-  absolutePath 在 rootPath 内 或 rootCanonicalPath 在 outsideLexicalCanonicalPath(可能的值为: absolutePath的规范路径|absolutePath路径) 内部, 否则抛出异常
-  context = { 
-      rootPath, absolutePath, rootCanonicalPath, 
-      lexicalInside = rootPath在absolutePath内部时为true否则为false
-      canonicalOutsideLexicalPath = absolutePath的规范路径(outsideLexicalCanonicalPath) 或 absolutePath路径
-    }
+  /* lyc: 创建边界解析上下文
+  满足下面任意条件:
+    跳过词汇根检查, 即 skipLexicalRootCheck=true
+    词汇跟检查正确, 即 absolutePath 在 rootPath 内
+    规范的词汇跟检查正确, 即 canonicalOutsideLexicalPath 在 rootCanonicalPath 内
+        canonicalOutsideLexicalPath 可能的值为: outsideLexicalCanonicalPath(absolutePath的规范的绝对路径) | absolutePath路径
+    context 为 { 
+        rootPath, absolutePath, rootCanonicalPath, 
+        lexicalInside = absolutePath在rootPath内部时为true否则为false
+        canonicalOutsideLexicalPath = outsideLexicalCanonicalPath(absolutePath的规范的绝对路径) | absolutePath路径
+      }
+  否则代表发生逃逸, 抛出异常
   */
   const context = createBoundaryResolutionContext({
     resolveParams: params,
@@ -126,8 +132,8 @@ export function resolveBoundaryPathSync(params: ResolveBoundaryPathParams): Reso
     absolutePath,
     rootCanonicalPath,
     /* lyc: 
-      外部词法的规范路径 = 如果 absolutePath 在 rootPath 外部, 则返回absolutePath的规范路径, 在内部则返回undefined
-      即只有absolutePath在rootPath外部时才会有外部词法的规范路径(outsideLexicalCanonicalPath=absolutePath的规范路径)否则为undefined
+      外部词汇的规范路径 = 如果 absolutePath 在 rootPath 外部, 则返回absolutePath的规范的绝对路径, 在内部则返回undefined
+      即 只有absolutePath在rootPath外部时才会有外部词汇的规范路径(outsideLexicalCanonicalPath=absolutePath的规范路径)否则为undefined
     */
     outsideLexicalCanonicalPath: resolveOutsideLexicalCanonicalPathSync({
       rootPath,
@@ -137,31 +143,41 @@ export function resolveBoundaryPathSync(params: ResolveBoundaryPathParams): Reso
 
   /* lyc: 解析外部边界路径, 如果路径在边界内，返回 null, 如果路径在边界外，返回外部边界路径
     边界内: absolutePath 在 rootPath 内
-    边界外: rootCanonicalPath 在 canonicalPath(即 canonicalOutsideLexicalPath)内部
+    边界外: canonicalPath(即 canonicalOutsideLexicalPath) 在 rootCanonicalPath 内部
     context.lexicalInside = true: 在边界内
       outsideResult = null
-    否则context.lexicalInside != true && rootCanonicalPath 在 canonicalPath(即 canonicalOutsideLexicalPath)内部: 边界外
+    否则context.lexicalInside != true && canonicalPath(即 canonicalOutsideLexicalPath) 在 rootCanonicalPath 内部: 边界外
     outsideResult = {
-      absolutePath,
-      canonicalPath = canonicalOutsideLexicalPath,
-      rootPath,
-      rootCanonicalPath,
-      relativePath: rootCanonicalPath 到 canonicalPath 的相对路径
-      exists: kind.exists, 文件是否存在
-      kind: kind.kind, 类型: file|directory|symlink|other
+      absolutePath: context.absolutePath(params.absolutePath)
+      rootPath: context.rootPath(params.rootPath)
+      rootCanonicalPath: context.rootCanonicalPath(params.rootCanonicalPath绝对路径 或 params.rootPath的规范的绝对路径)
+      canonicalPath: context.canonicalOutsideLexicalPath(absolutePath的规范的绝对路径(outsideLexicalCanonicalPath) 或 absolutePath路径)
+      relativePath: context.rootCanonicalPath 到 context.canonicalOutsideLexicalPath 的相对路径
+      exists: context.absolutePath是否存在
+      kind: context.absolutePath的文件类型file|directory|symlink|other
     }
-    resolveOutsideBoundaryPathSync 会验证外部路径是否真的逃逸了边界
+    resolveOutsideBoundaryPathSync 会验证外部路径是否真的逃逸了边界,逃逸会抛异常 即 canonicalPath(canonicalOutsideLexicalPath) 是否在 rootCanonicalPath 内部
   */
   const outsideResult = resolveOutsideBoundaryPathSync({
     boundaryLabel: params.boundaryLabel,
     context,
   });
-  // lyc: 如果返回了结果，说明路径确实在边界外，直接返回
+  // lyc: 外部: 如果返回了结果，说明路径确实在边界外，直接返回
   if (outsideResult) {
     return outsideResult;
   }
 
-  // lyc: 代表路径在边界内, 逐段解析路径，处理中间的符号链接，防止符号链接导致的边界逃逸。
+  /* lyc: 内部: 代表路径在边界内, 逐段解析路径，处理中间的符号链接，防止符号链接导致的边界逃逸。
+  return {
+    absolutePath: context.absolutePath(params.absolutePath)
+    rootPath: context.rootPath(params.rootPath)
+    rootCanonicalPath: context.rootCanonicalPath(params.rootCanonicalPath绝对路径 或 params.rootPath的规范的绝对路径)
+    canonicalPath: state.canonicalCursor: 以 rootCanonicalPath 为基础 追加 rootPath 到 absolutePath 的相对路径, 在进行规范化路径(解析符号链接)解析后的绝对地址
+    relativePath: context.rootCanonicalPath 到 state.canonicalCursor 的相对路径
+    exists: context.absolutePath是否存在
+    kind: context.absolutePath的文件类型file|directory|symlink|other
+  }
+  */
   return resolveBoundaryPathLexicalSync({
     params,
     absolutePath: context.absolutePath,
@@ -209,7 +225,7 @@ function createLexicalTraversalState(params: {
     allowFinalSymlink: 是否允许路径中最后一个片段是最终符号链接, allowFinalSymlinkForUnlink 允许最终符号链接不进行解析(unlink)
     canonicalCursor: 规范游标(规范化后的绝对路径游标)
     lexicalCursor: 词法游标(未规范化的路径游标)
-    preserveFinalSymlink: 后续处理中是否保留了路径中最后一个片段的最终符号链接, 默认是 false
+    preserveFinalSymlink: 后续处理中是否保留了路径中最后一个片段的最终符号链接, 默认是 false, 如果后续程序逻辑发现最后一个片段是符号链接(最终符号链接), 会修改为true代表已保留, allowFinalSymlink必须为true
   */
   return {
     segments: relative.split(path.sep).filter(Boolean),
@@ -220,7 +236,7 @@ function createLexicalTraversalState(params: {
   };
 }
 
-// lyc: 断言 rootCanonicalPath 在 candidatePath 内部, 否则抛异常
+// lyc: 断言 candidatePath 在 rootCanonicalPath 内部, 否则抛异常
 function assertLexicalCursorInsideBoundary(params: {
   params: ResolveBoundaryPathParams;
   rootCanonicalPath: string;
@@ -246,7 +262,7 @@ function applyMissingSuffixToCanonicalCursor(params: {
   const missingSuffix = params.state.segments.slice(params.missingFromIndex);
   // lyc: 将不存在的路径片段都追加到canonicalCursor后
   params.state.canonicalCursor = path.resolve(params.state.canonicalCursor, ...missingSuffix);
-  // lyc: 安全检查断言 rootCanonicalPath 在 candidatePath(canonicalCursor) 内部, 否则抛异常
+  // lyc: 安全检查断言 candidatePath(canonicalCursor) 在 rootCanonicalPath 内部, 否则抛异常
   // lyc: 确保即使在路径不存在的情况下，这个“假设”的路径也没有逃逸出根目录边界。
   assertLexicalCursorInsideBoundary({
     params: params.params,
@@ -309,8 +325,8 @@ function handleLexicalLstatFailure(params: {
   if (!isNotFoundPathError(params.error)) {
     return false;
   }
-  // lyc: 是文件,目录不存在的错误, 则应用缺失后缀到规范化后的绝对路径游标(规范游标)
-  // lyc: 这意味着路径中的某个中间目录不存在，解析器需要假设后续所有路径段都不存在，并直接将它们拼接到“规范游标”后，不再进行实际的文件系统检查。
+  // lyc: 是文件,目录不存在的错误, 则应用缺失后缀到规范化后的绝对路径游标(规范游标state.canonicalCursor)
+  // lyc: 这意味着路径中的某个中间目录不存在，解析器需要假设后续所有路径段都不存在，并直接将它们拼接到“规范游标state.canonicalCursor”后，不再进行实际的文件系统检查。
   applyMissingSuffixToCanonicalCursor({
     state: params.state,
     missingFromIndex: params.missingFromIndex,
@@ -372,7 +388,8 @@ function handleLexicalStatDisposition(params: {
   // lyc: 到这里代表当前一定是符号链接
 
   // lyc: allowFinalSymlink=true(允许最终符号链接) && params.isLast(最后一个路径段)
-  // lyc: 这代表允许保留最终符号链接：这通常发生在路径的最后一个段是一个悬空的符号链接（Dangling Symlink）且策略允许时。它移动规范游标(params.state.canonicalCursor)向前移动一个段params.segment（直接拼接路径）并标记 preserveFinalSymlink，然后返回 "break" 停止遍历
+  // lyc: 这代表允许保留最终符号链接：这通常发生在路径的最后一个段是一个悬空的符号链接（Dangling Symlink）且策略允许时。
+  // lyc: 它移动规范游标(params.state.canonicalCursor)向前移动一个段params.segment（直接拼接路径）并标记 preserveFinalSymlink，然后返回 "break" 停止遍历
   if (params.state.allowFinalSymlink && params.isLast) {
     params.state.preserveFinalSymlink = true;
     advanceCanonicalCursorForSegment({
@@ -542,6 +559,7 @@ function resolveBoundaryPathLexicalSync(params: {
     // lyc: 移动词汇游标到当前目录段
     state.lexicalCursor = path.join(state.lexicalCursor, segment);
     // lyc: 读取当前游标指向的文件状态
+    // lyc: 如果读取失败(目录或文件不存在)记录缺失后缀(存入state.canonicalCursor += state.segments[idx]开始直到最后一个路径片段)并跳出循环
     const maybeStat = readLexicalStat({
       state,
       missingFromIndex: idx,
@@ -554,13 +572,19 @@ function resolveBoundaryPathLexicalSync(params: {
       throw new Error("Unexpected async lexical stat");
     }
     const stat = maybeStat;
-    // lyc: readLexicalStat读取失败（目录或文件不存在），记录缺失后缀(存入stat.canonicalCursor)并跳出循环
+    // lyc: readLexicalStat读取失败(目录或文件不存在), 向state.canonicalCursor记录缺失后缀并跳出循环
     if (!stat) {
       break;
     }
 
-    // lyc: readLexicalStat 成功读取到一个目录或文件状态后，程序需要决定下一步做什么：是继续下一个路径段，还是处理符号链接？
-    // lyc: disposition 处理行为：继续下一个路径段、跳出循环、解析符号链接
+    /* lyc: readLexicalStat 成功读取到一个目录或文件状态后，程序需要决定下一步做什么：是继续下一个路径段，还是处理符号链接？
+    disposition 处理行为：continue继续下一个路径段、break跳出循环、resolve-link解析符号链接
+    continue: 当前路径段不是符号链接, 继续下一个路径段, 并更新state.canonicalCursor += segment
+    break: 是符号链接 并且 允许最终符号链接 并且 当前是最后一个路径片段(state.allowFinalSymlink=true & isLast=true)
+          并更新state.canonicalCursor += segment
+    resolve-link: 是符号链接(也可能是最终符号链接allowFinalSymlink=false时), 
+          并更新state.canonicalCursor = state.lexicalCursor = linkCanonical
+    */
     const disposition = handleLexicalStatDisposition({
       state,
       isSymbolicLink: stat.isSymbolicLink(),
@@ -578,7 +602,7 @@ function resolveBoundaryPathLexicalSync(params: {
       break;
     }
     // lyc: 到这里代表stat是符号链接
-    // lyc: 如果是符号链接，则解析符号链接指向的目标，并更新解析器的状态
+    // lyc: 如果是符号链接，则解析符号链接指向的目标，并更新解析器的状态, state.canonicalCursor = state.lexicalCursor = linkCanonical;
     // lyc: 这里会检查符号链接是否指向了边界外
     const maybeApplied = resolveAndApplySymlinkHop({
       state,
@@ -610,10 +634,10 @@ function resolveCanonicalOutsideLexicalPath(params: {
 
 /* lyc:
   构建解析所需的上下文环境，并在路径明显逃逸时抛出错误。
-  创建边界路径上下文, 确保 absolutePath 在 rootPath 内或 rootCanonicalPath 在 canonicalOutsideLexicalPath(可能的值为: absolutePath的规范路径|absolutePath路径) 内部否则报错
-  如果skipLexicalRootCheck!=true(不跳过词法根检查) 或 absolutePath 不在 rootPath 内 则进行词法根检查的断言
-    如果提供了outsideLexicalCanonicalPath, 则rootCanonicalPath必须在其内部, 否则报错
-    如果没有提供outsideLexicalCanonicalPath, 则rootCanonicalPath必须在absolutePath内部, 否则报错
+  创建边界路径上下文, 确保 absolutePath 在 rootPath 内 或 canonicalOutsideLexicalPath(可能的值为: absolutePath的规范的绝对路径|absolutePath路径) 在 rootCanonicalPath 内部否则报错
+  如果skipLexicalRootCheck!=true(不跳过词汇根检查) 或 absolutePath 不在 rootPath 内 则进行词汇根检查的断言
+    如果提供了 outsideLexicalCanonicalPath, 则其必须在rootCanonicalPath内部, 否则报错
+    如果没有提供 outsideLexicalCanonicalPath, 则absolutePath必须在rootCanonicalPath内部, 否则报错
 */
 function createBoundaryResolutionContext(params: {
   resolveParams: ResolveBoundaryPathParams;
@@ -622,15 +646,15 @@ function createBoundaryResolutionContext(params: {
   rootCanonicalPath: string;
   outsideLexicalCanonicalPath?: string;
 }): BoundaryResolutionContext {
-  // lyc: 代表是否是内部词法, 即 absolutePath 在 rootPath 内,是内部文件
+  // lyc: 代表是否是内部词汇, 即 absolutePath 在 rootPath 内,是内部文件
   const lexicalInside = isPathInside(params.rootPath, params.absolutePath);
-  // lyc: 代表外部词法的规范路径, 即优先使用 outsideLexicalCanonicalPath, 如果没有, 则使用 absolutePath
-  // lyc: 一定会有外部词法的规范路径, 如果没提供则使用absolutePath否则使用提供的outsideLexicalCanonicalPath
+  // lyc: 外部词汇的规范路径, 即优先使用 outsideLexicalCanonicalPath, 如果没有, 则使用 absolutePath
+  // lyc: 一定会有 外部词汇的规范路径, 如果没提供则使用absolutePath否则使用提供的outsideLexicalCanonicalPath
   const canonicalOutsideLexicalPath = resolveCanonicalOutsideLexicalPath({
     absolutePath: params.absolutePath,
     outsideLexicalCanonicalPath: params.outsideLexicalCanonicalPath,
   });
-  // lyc: 断言 rootCanonicalPath 在 canonicalOutsideLexicalPath 内部 或 skipLexicalRootCheck 或 lexicalInside为true 否则代表发生了逃逸则抛异常
+  // lyc: 断言 skipLexicalRootCheck为true 或 lexicalInside为true 或 canonicalOutsideLexicalPath 在 rootCanonicalPath 内部 否则代表发生了逃逸则抛异常
   assertLexicalBoundaryOrCanonicalAlias({
     skipLexicalRootCheck: params.resolveParams.skipLexicalRootCheck,
     lexicalInside,
@@ -710,7 +734,7 @@ async function resolveOutsideLexicalCanonicalPathAsync(params: {
 
 /* lyc: 
   用于确定如果文件被判定为“外部文件”(absolutePath 不在 rootPath 内)，它应该呈现为什么样的规范路径
-  如果 rootPath 在 absolutePath 内，直接返回 undefined 代表不是外部词法,
+  如果 absolutePath 在 rootPath 内，直接返回 undefined 代表不是外部词法,
     否则根据 absolutePath 解析规范的祖先路径来代表外部词法的规范路径
 */
 function resolveOutsideLexicalCanonicalPathSync(params: {
@@ -734,7 +758,7 @@ function buildOutsideLexicalBoundaryPath(params: {
   rootPath: string;
   kind: { exists: boolean; kind: ResolvedBoundaryPathKind };
 }): ResolvedBoundaryPath {
-  // lyc: 断言rootCanonicalPath在canonicalOutsideLexicalPath内部, 否则抛异常
+  // lyc: 断言 canonicalOutsideLexicalPath 在 rootCanonicalPath 内部, 否则抛异常
   assertInsideBoundary({
     boundaryLabel: params.boundaryLabel,
     rootCanonicalPath: params.rootCanonicalPath,
@@ -750,6 +774,12 @@ function buildOutsideLexicalBoundaryPath(params: {
   });
 }
 
+/* lyc: 断言词汇边界路径是否在边界内, 如果不在边界内, 则抛出异常
+  以下情况满足任意一种, 则路径在边界内, 不会抛出异常:
+  跳过词汇根检查, 即 skipLexicalRootCheck=true
+  词汇跟检查正确, 即 lexicalInside=true, 即 absolutePath 在 rootPath 内
+  规范的词汇跟检查正确, 即 canonicalOutsideLexicalPath 在 rootCanonicalPath 内
+*/
 function assertLexicalBoundaryOrCanonicalAlias(params: {
   skipLexicalRootCheck?: boolean;
   lexicalInside: boolean;
@@ -842,7 +872,7 @@ export function resolvePathViaExistingAncestorSync(targetPath: string): string {
       目标: /Link/A/B/C (假设 /Link 是符号链接指向 /Real, A 存在, B 和 C 不存在)。
       检查 /Link/A/B/C: 不存在 -> 记录 C, 光标移到 /Link/A/B.
       检查 /Link/A/B: 不存在 -> 记录 B, 光标移到 /Link/A.
-      检查 /Link/A: 存在! -> 循环结束。
+      检查 /Link/A: 存在 -> 循环结束。
       此时 cursor = /Link/A, missingSuffix = ['B', 'C'].
   */
   while (!isFilesystemRoot(cursor) && !fs.existsSync(cursor)) {

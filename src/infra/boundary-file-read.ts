@@ -66,6 +66,13 @@ export function canUseBoundaryFileOpen(ioFs: typeof fs): boolean {
   );
 }
 
+/* lyc: 在安全边界内读取文件
+params:
+  absolutePath: 要读取的文件的绝对路径
+  rootPath: 根目录（边界），确保文件在此目录内
+  boundaryLabel: 边界标签，用于错误信息
+  rejectHardlinks: 是否拒绝硬链接
+*/
 export function openBoundaryFileSync(params: OpenBoundaryFileSyncParams): BoundaryFileOpenResult {
   const ioFs = params.ioFs ?? fs;
   const resolved = resolveBoundaryFilePathGeneric({
