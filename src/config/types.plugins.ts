@@ -33,6 +33,11 @@ export type PluginsLoadConfig = {
   paths?: string[];
 };
 
+/* lyc: PluginInstallRecord 类型 是基于InstallRecordBase修改后的类型
+1.移除InstallRecordBase中的source属性, 保留其它属性 (Omit<InstallRecordBase, "source">)
+2.从新定义了InstallRecordBase.source属性, "npm" | "archive" | "path" | "clawhub" | "marketplace"
+3.添加了marketplaceName, marketplaceSource, marketplacePlugin 三个可选属性
+*/
 export type PluginInstallRecord = Omit<InstallRecordBase, "source"> & {
   source: InstallRecordBase["source"] | "marketplace";
   marketplaceName?: string;

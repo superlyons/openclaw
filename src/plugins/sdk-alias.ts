@@ -123,6 +123,7 @@ function findNearestPluginSdkPackageRoot(startDir: string, maxDepth = 12): strin
   return null;
 }
 
+// lyc: 解析加载器模块的 根package.json 所在的目录, 从modulePath, argv1, cwd, moduleUrl 中获取
 export function resolveLoaderPackageRoot(
   params: LoaderModuleResolveParams & { modulePath: string },
 ): string | null {

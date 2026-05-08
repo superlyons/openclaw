@@ -1128,13 +1128,16 @@ function normalizeManifestChannelCommandDefaults(
     : undefined;
 }
 
+// lyc: 解析插件元数据文件路径, rootDir 目录下的 openclaw.plugin.json 文件路径
 export function resolvePluginManifestPath(rootDir: string): string {
+  // lyc: rootDir目录下是否存在openclaw.plugin.json文件, 如果存在, 则返回该文件路径
   for (const filename of PLUGIN_MANIFEST_FILENAMES) {
     const candidate = path.join(rootDir, filename);
     if (fs.existsSync(candidate)) {
       return candidate;
     }
   }
+  // lyc: 如果没有找到openclaw.plugin.json文件, 则返回默认插件元数据文件路径: rootDir/openclaw.plugin.json 文件
   return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
 }
 
@@ -1153,7 +1156,9 @@ export function loadPluginManifest(
   rejectHardlinks = true,
   rootRealPath?: string,
 ): PluginManifestLoadResult {
+  // lyc: 解析插件元数据文件路径, rootDir 目录下的 openclaw.plugin.json 文件路径
   const manifestPath = resolvePluginManifestPath(rootDir);
+  // lyc: 打开插件元数据文件
   const opened = openBoundaryFileSync({
     absolutePath: manifestPath,
     rootPath: rootDir,

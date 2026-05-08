@@ -188,7 +188,7 @@ export function loadRuntimeDotEnvFile(filePath: string, opts?: { quiet?: boolean
   }
 }
 
-// lyc: 加载工作区的环境变量(.env)到process.env中, 过滤掉被阻止的环境变量
+// lyc: 加载工作区的环境变量(.env)到process.env中, 过滤掉被阻止的环境变量, 工作区环境变量不会覆盖已有的环境变量(一般为命令行指定的环境变量)
 export function loadWorkspaceDotEnvFile(filePath: string, opts?: { quiet?: boolean }) {
   const parsed = readDotEnvFile({
     filePath,

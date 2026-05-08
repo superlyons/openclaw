@@ -20,12 +20,15 @@ import {
 } from "./manifest.js";
 import { resolveLoaderPackageRoot } from "./sdk-alias.js";
 
+// lyc: 解析加载器模块的 根package.json 所在的目录, 从modulePath, argv1, cwd, moduleUrl 中获取
+// lyc: 如果无法解析, 则返回当前模块的目录
 const OPENCLAW_PACKAGE_ROOT =
   resolveLoaderPackageRoot({
     modulePath: fileURLToPath(import.meta.url),
     moduleUrl: import.meta.url,
   }) ?? fileURLToPath(new URL("../..", import.meta.url));
 const CURRENT_MODULE_PATH = fileURLToPath(import.meta.url);
+// lyc: 从已构建工件中运行: 当前文件是否在 dist 或 dist-runtime 目录下则代表从已构建工件中运行
 const RUNNING_FROM_BUILT_ARTIFACT =
   CURRENT_MODULE_PATH.includes(`${path.sep}dist${path.sep}`) ||
   CURRENT_MODULE_PATH.includes(`${path.sep}dist-runtime${path.sep}`);
@@ -67,6 +70,8 @@ function readPackageManifest(pluginDir: string): PackageManifest | undefined {
   }
 }
 
+// lyc: 解析捆绑插件元数据扫描目录, 如果提供了scanDir, 则返回该目录, 否则返回捆绑插件的扫描目录
+// lyc: packageRoot 目录下的 extensions | dist-runtime/extensions | dist/extensions | undefined 目录
 function resolveBundledPluginMetadataScanDir(
   packageRoot: string,
   scanDir?: string,
@@ -93,12 +98,15 @@ function collectBundledPluginMetadata(
   includeSyntheticChannelConfigs: boolean,
   scanDir?: string,
 ): readonly BundledPluginMetadata[] {
+  // lyc: 解析捆绑插件元数据扫描目录
   const resolvedScanDir = resolveBundledPluginMetadataScanDir(packageRoot, scanDir);
+  // lyc: 如果扫描目录不存在, 则返回空数组
   if (!resolvedScanDir || !fs.existsSync(resolvedScanDir)) {
     return [];
   }
 
   const entries: BundledPluginMetadata[] = [];
+  // lyc: 遍历扫描目录下的所有子目录, 并收集插件元数据
   for (const dirName of fs
     .readdirSync(resolvedScanDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -187,6 +195,7 @@ export function listBundledPluginMetadata(params?: {
   includeChannelConfigs?: boolean;
   includeSyntheticChannelConfigs?: boolean;
 }): readonly BundledPluginMetadata[] {
+  // lyc: 根package.json 所在的目录
   const rootDir = path.resolve(params?.rootDir ?? OPENCLAW_PACKAGE_ROOT);
   const scanDir = params?.scanDir ? path.resolve(params.scanDir) : undefined;
   const includeChannelConfigs = params?.includeChannelConfigs ?? !RUNNING_FROM_BUILT_ARTIFACT;

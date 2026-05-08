@@ -102,6 +102,10 @@ export function collectBundledPluginRuntimeSidecarArtifacts(
   return artifacts.length > 0 ? artifacts : undefined;
 }
 
+/* lyc: 解析已构建插件扫描目录, 返回: packageRoot 目录下的 extensions | dist-runtime/extensions | dist/extensions | undefined 目录 
+如果是在已构建工件中运行, 依次优先返回 dist/extensions | dist-runtime/extensions 目录(如果存在)
+不是从已构建工件中运行, 依次优先返回extensions | dist-runtime/extensions | dist/extensions 目录(如果存在)
+*/
 export function resolveBundledPluginScanDir(params: {
   packageRoot: string;
   runningFromBuiltArtifact: boolean;

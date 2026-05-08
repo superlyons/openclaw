@@ -16,6 +16,7 @@ export function resolveCompatRegistryVersion(): string {
   );
 }
 
+// lyc: 计算已安装插件索引策略的哈希值
 export function resolveInstalledPluginIndexPolicyHash(config: OpenClawConfig | undefined): string {
   const normalized = normalizePluginsConfig(config?.plugins);
   const channelPolicy: Record<string, boolean> = {};

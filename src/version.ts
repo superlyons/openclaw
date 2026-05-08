@@ -104,6 +104,14 @@ export function resolveUsableRuntimeVersion(version: string | undefined): string
   return trimmed;
 }
 
+/* lyc: 从环境变量和运行时版本(params.runtimeVersion)中解析版本
+如果params.preference === "env-first"
+  v = [params.env["OPENCLAW_VERSION"], params.runtimeVersion]
+否则代表params.preference === "runtime-first"
+  v = [params.runtimeVersion, params.env["OPENCLAW_VERSION"]]
+v.append([params.env["OPENCLAW_SERVICE_VERSION"], params.env["npm_package_version"]])
+在v中找到第一个非undefined的值, 如果都为undefined, 则返回params.fallback=默认值为unknown
+*/
 function resolveVersionFromRuntimeSources(params: {
   env: RuntimeVersionEnv;
   runtimeVersion: string | undefined;
@@ -135,18 +143,24 @@ export function resolveRuntimeServiceVersion(
   });
 }
 
+// lyc: 解析openclaw版本, 解析兼容性主机版本
 export function resolveCompatibilityHostVersion(
   env: RuntimeVersionEnv = process.env as RuntimeVersionEnv,
   fallback = RUNTIME_SERVICE_VERSION_FALLBACK,
 ): string {
+  // lyc: 如果env.OPENCLAW_COMPATIBILITY_HOST_VERSION(OPENCLAW兼容性主机版本)存在, 则返回该值
   const explicitCompatibilityVersion = firstNonEmpty(env.OPENCLAW_COMPATIBILITY_HOST_VERSION);
   if (explicitCompatibilityVersion) {
     return explicitCompatibilityVersion;
   }
+  // lyc: 从环境变量和运行时版本(params.runtimeVersion)中解析版本
   return resolveVersionFromRuntimeSources({
     env,
+    // lyc: openclaw版本, 如果不存在或值是"0.0.0.0", 则返回unknown
     runtimeVersion: resolveUsableRuntimeVersion(VERSION),
+    // lyc: 默认值为unknown
     fallback,
+    // lyc: 偏好: 如果入参env是process.env, 则返回runtime-first, 否则返回env-first
     preference: env === (process.env as RuntimeVersionEnv) ? "runtime-first" : "env-first",
   });
 }
@@ -161,7 +175,7 @@ export function resolveCompatibilityHostVersion(
 /* lyc: 
   当前 OpenClaw 版本, 优先级如下:
   - 从注入的版本获取 __OPENCLAW_VERSION__
-  - 从 package.json或build-info.json 获取
+  - 从 package.json或build-info.json 获取, json文件必须满足有name和version属性, 且name属性值为 CORE_PACKAGE_NAME="openclaw"
   - 从捆绑的版本获取 env.OPENCLAW_BUNDLED_VERSION
   - 默认值为 "0.0.0"
  */

@@ -48,6 +48,11 @@ function normalizeInstallRecord(
   return normalized;
 }
 
+/*lyc: 恢复安装记录, 必须设置source属性值, 深度拷贝并将类型转换为 PluginInstallRecord 类型
+record必须设置了source属性值, 否则返回undefined, 
+对record进行深拷贝, 避免修改原始record
+对深度拷贝的record进行 PluginInstallRecord 类型转换, 入参 record 为 InstalledPluginInstallRecordInfo 类型
+*/
 function restoreInstallRecord(
   record: InstalledPluginInstallRecordInfo | undefined,
 ): PluginInstallRecord | undefined {
@@ -72,6 +77,8 @@ export function normalizeInstallRecordMap(
   return normalized;
 }
 
+// lyc: 恢复安装记录映射(多个安装记录), 排序, 深拷贝, 类型转换为 PluginInstallRecord 类型
+// lyc: 注意入参是Record<string, InstalledPluginInstallRecordInfo>类型, 返回值是Record<string, PluginInstallRecord>类型
 function restoreInstallRecordMap(
   records: Readonly<Record<string, InstalledPluginInstallRecordInfo>> | undefined,
 ): Record<string, PluginInstallRecord> {
@@ -87,12 +94,21 @@ function restoreInstallRecordMap(
   return restored;
 }
 
+// lyc: 从已安装插件索引(InstalledPluginInde)中提取插件安装记录(PluginInstallRecords)
+// lyc: 从index.installRecords 或 index.plugins[].installRecord中提取安装记录
 export function extractPluginInstallRecordsFromInstalledPluginIndex(
   index: InstalledPluginIndex | null | undefined,
 ): Record<string, PluginInstallRecord> {
+  // lyc: index有installRecords属性, 则认为是已安装插件索引(InstalledPluginIndex), 对其深度拷贝并返回
+  // lyc: installRecords类型为Record<string, InstalledPluginInstallRecordInfo>, 返回值是Record<string, PluginInstallRecord>类型
   if (index && Object.prototype.hasOwnProperty.call(index, "installRecords")) {
     return restoreInstallRecordMap(index.installRecords);
   }
+  // lyc: index没有installRecords属性, 
+  /* lyc: 对其plugins属性进行遍历, 提取安装记录
+    plugins类型为InstalledPluginIndexRecord[], 该类型有 installRecord?: InstalledPluginInstallRecordInfo属性
+    对plugins中每个插件installRecord属性进行深度拷贝并转换为PluginInstallRecord类型, 并存储到records中
+  */
   const records: Record<string, PluginInstallRecord> = {};
   for (const plugin of index?.plugins ?? []) {
     const record = restoreInstallRecord(plugin.installRecord);

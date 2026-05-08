@@ -30,6 +30,8 @@ export type InstalledPluginStartupInfo = {
   agentHarnesses: readonly string[];
 };
 
+// lyc: InstalledPluginInstallRecordInfo = PluginInstallRecord 类型
+// lyc: Pick<type, "key1" | "key2" ...>: Pick 是 TypeScript 内置的工具类型，用于从一个类型中挑选出指定的属性，构造一个新的类型。
 export type InstalledPluginInstallRecordInfo = Pick<
   PluginInstallRecord,
   | "source"

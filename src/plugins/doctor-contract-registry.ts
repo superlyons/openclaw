@@ -76,6 +76,7 @@ function buildDoctorContractBaseCacheKey(params: {
   return JSON.stringify(resolveDoctorContractBaseCachePayload(params));
 }
 
+// lyc: 解析插件缓存输入
 function resolveDoctorContractBaseCachePayload(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
@@ -83,6 +84,7 @@ function resolveDoctorContractBaseCachePayload(params: {
   roots: PluginSourceRoots;
   loadPaths: string[];
 } {
+  // lyc: 解析插件缓存输入: { roots: [stock, global, workspace] , loadPaths: [...]}
   const { roots, loadPaths } = resolvePluginCacheInputs({
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -138,6 +140,14 @@ function hasLegacyElevenLabsTalkFields(raw: unknown): boolean {
   );
 }
 
+/* lyc: 计算所有可能的插件ID，从raw配置的channels, plugins.entries 和 talk中提取
+return: [
+    root.channels.属性名(排除defaults属性名), 
+    root.plugins.entries.属性名,
+    root.talk && root.talk有其中一个属性:["voiceId", "voiceAliases", "modelId", "outputFormat", "apiKey"] && "elevenlabs"
+].toSorted()
+elevenlabs是一个AI语音合成与声音克隆平台
+*/
 export function collectRelevantDoctorPluginIds(raw: unknown): string[] {
   const ids = new Set<string>();
   const root = asNullableRecord(raw);
