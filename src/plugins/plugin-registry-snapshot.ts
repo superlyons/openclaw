@@ -253,8 +253,12 @@ export function loadPluginRegistrySnapshotWithMetadata(
       level: "warn",
       // lyc: 持久化注册表已禁用
       code: "persisted-registry-disabled",
-      // lyc: formatDeprecatedPersistedRegistryDisableWarning 使用旧版派生插件索引
-      // lyc: 调用方已禁用持久化插件注册表读取；正在使用派生插件索引
+      /* lyc: 
+      环境变量禁用的警告信息：(disabledByEnv=true)
+        OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY 是一个已弃用的紧急兼容性开关；请使用 `openclaw plugins registry --refresh` 或 `openclaw doctor --fix` 来修复注册表状态。正在使用旧版派生插件索引。
+      调用方禁用的警告信息：(disabledByCaller=true)
+        调用方已禁用持久化插件注册表读取；正在使用派生插件索引
+      */
       message: disabledByEnv
         ? `${formatDeprecatedPersistedRegistryDisableWarning()} Using legacy derived plugin index.`
         : "Persisted plugin registry reads are disabled by the caller; using derived plugin index.",

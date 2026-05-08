@@ -58,6 +58,7 @@ export function clearBundledPluginMetadataCache(): void {
   bundledPluginMetadataCache.clear();
 }
 
+// lyc: 读取插件的 package.json 文件, 并解析为 PackageManifest 实例对象
 function readPackageManifest(pluginDir: string): PackageManifest | undefined {
   const packagePath = path.join(pluginDir, "package.json");
   if (!fs.existsSync(packagePath)) {
@@ -92,6 +93,7 @@ function resolveBundledPluginLookupParams(params: { rootDir: string; scanDir?: s
   return params.scanDir ? params : { rootDir: params.rootDir };
 }
 
+// lyc: 收集捆绑插件元数据
 function collectBundledPluginMetadata(
   packageRoot: string,
   includeChannelConfigs: boolean,
@@ -113,11 +115,12 @@ function collectBundledPluginMetadata(
     .map((entry) => entry.name)
     .toSorted((left, right) => left.localeCompare(right))) {
     const pluginDir = path.join(resolvedScanDir, dirName);
+    // lyc: 加载插件元数据 rootDir/openclaw.plugin.json 文件的实例对象
     const manifestResult = loadPluginManifest(pluginDir, false);
     if (!manifestResult.ok) {
       continue;
     }
-
+    // lyc: 读取插件的 rootDir/package.json 文件, 并解析为 OpenClawPackageManifest 实例对象
     const packageJson = readPackageManifest(pluginDir);
     const packageManifest = getPackageManifestMetadata(packageJson);
     const extensions = normalizeBundledPluginStringList(packageManifest?.extensions);
@@ -188,7 +191,7 @@ function collectBundledPluginMetadata(
 
   return entries;
 }
-
+// lyc: 列出捆绑插件元数据
 export function listBundledPluginMetadata(params?: {
   rootDir?: string;
   scanDir?: string;
@@ -198,7 +201,9 @@ export function listBundledPluginMetadata(params?: {
   // lyc: 根package.json 所在的目录
   const rootDir = path.resolve(params?.rootDir ?? OPENCLAW_PACKAGE_ROOT);
   const scanDir = params?.scanDir ? path.resolve(params.scanDir) : undefined;
+  // lyc: !RUNNING_FROM_BUILT_ARTIFACT: 如果是在以构建的代码中运行, 则不包含通道配置
   const includeChannelConfigs = params?.includeChannelConfigs ?? !RUNNING_FROM_BUILT_ARTIFACT;
+  // lyc: includeSyntheticChannelConfigs: 是否包含合成通道配置
   const includeSyntheticChannelConfigs =
     params?.includeSyntheticChannelConfigs ?? includeChannelConfigs;
   const cacheKey = JSON.stringify({

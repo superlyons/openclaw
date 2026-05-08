@@ -1141,6 +1141,7 @@ export function resolvePluginManifestPath(rootDir: string): string {
   return path.join(rootDir, PLUGIN_MANIFEST_FILENAME);
 }
 
+// lyc: 解析插件类型，返回插件类型("memory" | "context-engine") 或 插件类型数组 或 undefined
 function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   if (typeof raw === "string") {
     return raw as PluginKind;
@@ -1151,6 +1152,7 @@ function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   return undefined;
 }
 
+// lyc: 加载插件元数据 rootDir/openclaw.plugin.json 文件，未完全看完代码
 export function loadPluginManifest(
   rootDir: string,
   rejectHardlinks = true,
@@ -1168,6 +1170,7 @@ export function loadPluginManifest(
     rejectHardlinks,
   });
   if (!opened.ok) {
+    // lyc: 根据opened.reason返回错误信息, 即path和fallback返回的信息
     return matchBoundaryFileOpenFailure(opened, {
       path: () => ({
         ok: false,
@@ -1204,10 +1207,12 @@ export function loadPluginManifest(
   if (!configSchema) {
     return { ok: false, error: "plugin manifest requires configSchema", manifestPath };
   }
-
+  // lyc: 解析插件类型，返回插件类型("memory" | "context-engine") 或 插件类型数组 或 undefined
   const kind = parsePluginKind(raw.kind);
   const enabledByDefault = raw.enabledByDefault === true;
+  // lyc: legacyPluginIds: 旧插件ID列表, 用于兼容旧插件
   const legacyPluginIds = normalizeTrimmedStringList(raw.legacyPluginIds);
+  // lyc: 当配置提供者时自动启用 的配置提供者列表
   const autoEnableWhenConfiguredProviders = normalizeTrimmedStringList(
     raw.autoEnableWhenConfiguredProviders,
   );
@@ -1217,7 +1222,8 @@ export function loadPluginManifest(
   const channels = normalizeTrimmedStringList(raw.channels);
   const providers = normalizeTrimmedStringList(raw.providers);
   const providerDiscoveryEntry = normalizeOptionalString(raw.providerDiscoveryEntry);
-  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);
+  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);‘
+  // lyc: modelCatalog中相关属性值必须包含providers中的提供者
   const modelCatalog = normalizeModelCatalog(raw.modelCatalog, {
     ownedProviders: new Set(providers),
   });
