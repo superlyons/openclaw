@@ -121,7 +121,10 @@ function hasMismatchedPersistedBundledPluginRoot(
   );
 }
 
-// lyc: 解析派生快照缓存键
+/* lyc: 解析派生快照缓存键, 组成成分:
+持久化插件注册表存储路径,插件源根目录,加载路径,openclaw版本,环境变量(禁用持久化插件注册表,禁用捆绑插件,VITEST)组成
+入参params只有提供: cache=非false值, preferPersisted=非false值, env, index 属性时才会执行逻辑, 否则返回null
+*/
 function resolveDerivedSnapshotCacheKey(
   params: LoadPluginRegistryParams,
   env: NodeJS.ProcessEnv,
@@ -141,20 +144,20 @@ function resolveDerivedSnapshotCacheKey(
   ) {
     return null;
   }
-  // lyc: { roots:{ stock:"packageRoot/dist/extensions", global:"~/.openclaw/extensions", workspace:"workspace/.openclaw/extensions" }, loadPaths:[...] }
+  // lyc: 解析插件缓存输入: { roots插件源根目录: { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: openclaw的配置目录/extensions } , loadPaths加载路径: [...]}
   const { roots, loadPaths } = resolvePluginCacheInputs({ env });
   return JSON.stringify({
     // lyc: 持久化插件注册表存储路径, 默认为: ~/.openclaw/plugins/installs.json
     persistedStore: resolveInstalledPluginIndexStorePath({ env }),
-    // lyc: { stock:"packageRoot/dist/extensions", global:"~/.openclaw/extensions", workspace:"workspace/.openclaw/extensions" }
+    // lyc: 插件源根目录: { stock:"packageRoot/dist/extensions", global:"~/.openclaw/extensions", workspace:"workspace/.openclaw/extensions" }
     roots,
-    // lyc: loadPaths:[]
+    // lyc: 加载路径: loadPaths:[]
     loadPaths,
     // lyc: openclaw版本, 默认值为unknown
     hostContractVersion: resolveCompatibilityHostVersion(env),
-    // lyc: 禁用持久化插件注册表, 默认值为""
+    // lyc: 环境变量 禁用持久化插件注册表, 默认值为""
     disablePersisted: env[DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV] ?? "",
-    // lyc: 禁用捆绑插件, 默认值为""
+    // lyc: 环境变量 禁用捆绑插件, 默认值为""
     disableBundled: env.OPENCLAW_DISABLE_BUNDLED_PLUGINS ?? "",
     // lyc: 是否是vitest环境, 默认值为""
     vitest: env.VITEST ?? "",
@@ -176,19 +179,19 @@ export function loadPluginRegistrySnapshotWithMetadata(
   const env = params.env ?? process.env;
   // lyc: 初始化诊断数组
   const diagnostics: PluginRegistrySnapshotDiagnostic[] = [];
-  // lyc: 是否由调用者禁用 = 偏好使用持久化插件注册表=false
+  // lyc: 调用者 是否禁用 持久化插件注册表: 是否由调用者禁用 = 偏好使用持久化 插件注册表=false
   const disabledByCaller = params.preferPersisted === false;
-  // lyc: 是否由环境变量禁用 = 禁用OPENCLAW的持久化插件注册表(OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY)=true
+  // lyc: 环境变量 是否禁用 持久化插件注册表: 是否由环境变量禁用 = 禁用持久化 插件注册表(OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY)=true
   const disabledByEnv = hasEnvFlag(env, DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV);
-  // lyc: 持久化读取功能已启用 = 调用者和环境变量都没有禁用持久化插件注册表时为true
+  // lyc: 持久化读取功能已启用 = 调用者 和 环境变量 都没有禁用 持久化插件注册表 时为已启用
   const persistedReadsEnabled = !disabledByCaller && !disabledByEnv;
-  // lyc: 持久化安装记录读取功能已启用 = 环境变量没有禁用持久化插件注册表时为true
+  // lyc: 持久化安装记录读取功能已启用 = 环境变量 没有禁用 持久化插件注册表 时为已启用
   const persistedInstallRecordReadsEnabled = !disabledByEnv;
   // lyc: 派生缓存键: 如果 持久化读取功能已启用(persistedReadsEnabled), 则解析派生快照缓存键, 否则为null
   const derivedCacheKey = persistedReadsEnabled
     ? resolveDerivedSnapshotCacheKey(params, env)
     : null;
-  // lyc: 如果 派生缓存键存在, 则尝试从缓存中获取插件注册表快照, 如果存在且未过期, 则返回缓存结果, 否则继续执行
+  // lyc: 如果 持久化读取功能已启用(persistedReadsEnabled) & 派生缓存键存在(derivedCacheKey), 则尝试从缓存中获取派生插件注册表快照, 如果存在且未过期, 则返回缓存结果, 否则继续执行
   if (derivedCacheKey) {
     const cached = derivedSnapshotCache.get(derivedCacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -196,11 +199,12 @@ export function loadPluginRegistrySnapshotWithMetadata(
     }
   }
   let persistedIndex: InstalledPluginIndex | null = null;
-  // lyc: 如果 持久化安装记录读取功能已启用(persistedInstallRecordReadsEnabled), 则尝试从缓存中获取插件注册表快照, 如果存在且未过期, 则返回缓存结果, 否则继续执行
+  // lyc: 如果 持久化安装记录读取功能已启用(persistedInstallRecordReadsEnabled) 即: 环境变量 env.DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV 没有禁用 持久化插件注册表
   if (persistedInstallRecordReadsEnabled) {
     // lyc: 解析已安装插件索引, 即解析value(~/.openclaw/plugins/installs.json)为 InstalledPluginIndex 类型的实例, 并特别处理 installRecords 属性
     persistedIndex = readPersistedInstalledPluginIndexSync(params);
-    // lyc: 持久化读取功能已启用(调用者和环境变量都没有禁用持久化插件注册表时为true) & 解析已安装插件索引成功
+    // lyc: 持久化读取功能已启用(调用者和环境变量都没有禁用持久化插件注册表时为true) & 解析已安装插件索引(persistedIndex) 成功
+    // lyc: 对 解析已安装插件索引(persistedIndex) 进行策略、源、绑定件树的校验, 效验成功返回, 否则继续执行
     if (persistedReadsEnabled && persistedIndex) {
       if (
         params.config &&
@@ -233,6 +237,7 @@ export function loadPluginRegistrySnapshotWithMetadata(
             "Persisted plugin registry points at a different bundled plugin tree; using derived plugin index. Run `openclaw plugins registry --refresh` to update the persisted registry.",
         });
       } else {
+        // lyc: 如果 已安装插件索引 策略、源、绑定件树都匹配, 则返回 已安装插件索引
         return {
           snapshot: persistedIndex,
           source: "persisted",
@@ -240,6 +245,7 @@ export function loadPluginRegistrySnapshotWithMetadata(
         };
       }
     } else if (persistedReadsEnabled) {
+      // lyc: 持久化读取功能未启用(调用者或环境变量有一个或全部禁用了持久化插件注册表时为false) 或 解析已安装插件索引失败
       diagnostics.push({
         level: "info",
         // lyc: 持久化注册表缺失
@@ -249,6 +255,7 @@ export function loadPluginRegistrySnapshotWithMetadata(
       });
     }
   } else {
+    // lyc: 持久化安装记录读取功能未启用(persistedInstallRecordReadsEnabled) 即: 环境变量 env.DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV 禁用了 持久化插件注册表
     diagnostics.push({
       level: "warn",
       // lyc: 持久化注册表已禁用
@@ -284,10 +291,13 @@ export function loadPluginRegistrySnapshotWithMetadata(
   return result;
 }
 
+// lyc: 解析插件注册表(PluginRegistry) 的快照(PluginRegistrySnapshot) 并返回解析后的快照; 快照为 InstalledPluginIndex 类型的实例
+// lyc: PluginRegistrySnapshot = InstalledPluginIndex 类型的实例
 function resolveSnapshot(params: LoadPluginRegistryParams = {}): PluginRegistrySnapshot {
   return loadPluginRegistrySnapshotWithMetadata(params).snapshot;
 }
 
+// lyc: 加载插件注册表(PluginRegistry) 的快照(PluginRegistrySnapshot) 快照为 InstalledPluginIndex 类型的实例
 export function loadPluginRegistrySnapshot(
   params: LoadPluginRegistryParams = {},
 ): PluginRegistrySnapshot {

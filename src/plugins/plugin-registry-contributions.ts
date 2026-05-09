@@ -276,6 +276,7 @@ function filterContributionOwnerIds(params: {
   return sortUnique(params.owners.filter((owner) => enabledPluginIds.has(owner)));
 }
 
+// lyc: 为 插件注册表(PluginRegistry) 加载 插件清单注册表(PluginManifestRegistry)
 export function loadPluginManifestRegistryForPluginRegistry(
   params: LoadPluginRegistryManifestParams = {},
 ): PluginManifestRegistry {

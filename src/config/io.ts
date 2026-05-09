@@ -1372,10 +1372,14 @@ function resolveConfigForRead(
   };
 }
 
+// lyc: 解析配置文件中的插件兼容性问题, 并返回解析后的配置对象。
 function resolveLegacyConfigForRead(
+  // lyc: configPath配置文件解析后的配置对象, 已处理$include指令和环境变量引用
   resolvedConfigRaw: unknown,
+  // lyc: 原始配置文件解析后的配置对象, 未处理$include指令和环境变量引用
   sourceRaw: unknown,
 ): LegacyMigrationResolution {
+  // lyc: 计算所有可能的插件ID，从 resolvedConfigRaw 配置的channels, plugins.entries 和 talk中提取
   const pluginIds = collectRelevantDoctorPluginIds(resolvedConfigRaw);
   const sourceLegacyIssues = findLegacyConfigIssues(
     resolvedConfigRaw,

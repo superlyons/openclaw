@@ -119,9 +119,10 @@ function copySafeInstallRecords(
 如果 installRecords 属性不存在, 则从 plugins 中提取安装记录, 并存储到 installRecords 中
 */
 function parseInstalledPluginIndex(value: unknown): InstalledPluginIndex | null {
-  // lyc: value 是 ~/.openclaw/plugins/installs.json文件的JSON对象, 
-  // lyc: 使用 InstalledPluginIndexSchema 验证 value, 通过返回验证后的对象, 否则返回null, 
-  // lyc: 验证通过 将解析后的对象转换为 InstalledPluginIndex 类型,且规定 installRecords 属性不是必须的
+  /* lyc: value 是 ~/.openclaw/plugins/installs.json文件的JSON对象, 
+  使用 InstalledPluginIndexSchema 验证 value, 通过则返回验证后的对象, 否则返回null, 
+  验证通过 将解析后的对象转换为 InstalledPluginIndex 类型, 且规定 installRecords 属性不是必须的
+  */
   const parsed = safeParseWithSchema(InstalledPluginIndexSchema, value) as
     | (Omit<InstalledPluginIndex, "installRecords"> & {
         installRecords?: InstalledPluginIndex["installRecords"];
@@ -131,13 +132,20 @@ function parseInstalledPluginIndex(value: unknown): InstalledPluginIndex | null 
   if (!parsed) {
     return null;
   }
-  // lyc: 复制安全安装记录, 从 parsed.installRecords 或 parsed.plugins[].installRecord 中提取
+  /* lyc: 复制安全安装记录, 从 parsed.installRecords 或 parsed.plugins[].installRecord 中提取
+  parsed 是  ~/.openclaw/plugins/installs.json文件的JSON对象 并验证后转化为 InstalledPluginIndex 类型的实例, 
+  InstalledPluginIndex 类型有两处存储了安装记录(installRecord)信息
+    InstalledPluginIndex.installRecords: Readonly<Record<string, InstalledPluginInstallRecordInfo>>
+    InstalledPluginIndex.plugins: readonly InstalledPluginIndexRecord[]
+      .installRecord?: InstalledPluginInstallRecordInfo
+  */
   const installRecords =
     copySafeInstallRecords(parsed.installRecords) ??
     copySafeInstallRecords(
       extractPluginInstallRecordsFromInstalledPluginIndex(parsed as InstalledPluginIndex),
     ) ??
     {};
+  // lyc: 深度复制 InstalledPluginIndex 类型的实例, 并返回复制后的实例
   return {
     version: parsed.version,
     ...(parsed.warning ? { warning: parsed.warning } : {}),
@@ -161,7 +169,7 @@ export async function readPersistedInstalledPluginIndex(
   return parseInstalledPluginIndex(parsed);
 }
 
-// lyc: 解析已安装插件索引, 即解析value(~/.openclaw/plugins/installs.json)为 InstalledPluginIndex 类型的实例, 并特别处理 installRecords 属性
+// lyc: 解析已安装插件索引, 即解析~/.openclaw/plugins/installs.json文件为 InstalledPluginIndex 类型的实例, 并特别处理 installRecords 属性
 export function readPersistedInstalledPluginIndexSync(
   options: InstalledPluginIndexStoreOptions = {},
 ): InstalledPluginIndex | null {

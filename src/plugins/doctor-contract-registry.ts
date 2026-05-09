@@ -58,6 +58,7 @@ function loadPluginDoctorContractModule(modulePath: string): PluginDoctorContrac
   return getJiti(modulePath)(modulePath) as PluginDoctorContractModule;
 }
 
+// lyc: 构建插件Doctor合同缓存键, 由插件源根目录 和 加载路径 和 排序后的插件ID列表 组成
 function buildDoctorContractCacheKey(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
@@ -69,6 +70,7 @@ function buildDoctorContractCacheKey(params: {
   });
 }
 
+// lyc: 构建插件Doctor合同基础缓存键, 由插件源根目录 和 加载路径组成
 function buildDoctorContractBaseCacheKey(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
@@ -76,7 +78,7 @@ function buildDoctorContractBaseCacheKey(params: {
   return JSON.stringify(resolveDoctorContractBaseCachePayload(params));
 }
 
-// lyc: 解析插件缓存输入
+// lyc: 解析插件Doctor合同基础缓存有效负载 由 插件源根目录 和 加载路径 组成
 function resolveDoctorContractBaseCachePayload(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
@@ -84,7 +86,7 @@ function resolveDoctorContractBaseCachePayload(params: {
   roots: PluginSourceRoots;
   loadPaths: string[];
 } {
-  // lyc: 解析插件缓存输入: { roots: [stock, global, workspace] , loadPaths: [...]}
+  // lyc: 解析插件缓存输入: { roots插件源根目录: { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: openclaw的配置目录/extensions } , loadPaths加载路径: [...]}
   const { roots, loadPaths } = resolvePluginCacheInputs({
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -268,31 +270,36 @@ function loadPluginDoctorContractEntry(
   return entry;
 }
 
+// lyc: 解析插件的Doctor合同, 并返回解析后的 Doctor合同对象列表
 function resolvePluginDoctorContracts(params?: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   pluginIds?: readonly string[];
 }): PluginDoctorContractEntry[] {
   const env = params?.env ?? process.env;
+  // lyc: 构建插件Doctor合同基础缓存键, 由插件源根目录 和 加载路径组成
   const baseCacheKey = buildDoctorContractBaseCacheKey({
     workspaceDir: params?.workspaceDir,
     env,
   });
+  // lyc: 构建插件Doctor合同缓存键, 由插件源根目录 和 加载路径 和 排序后的pluginIds列表 组成
   const cacheKey = buildDoctorContractCacheKey({
     workspaceDir: params?.workspaceDir,
     env,
     pluginIds: params?.pluginIds,
   });
+  // lyc: 从缓存中获取 cacheKey(插件Doctor合同缓存键) 对应的 合同对象列表, 如果存在则直接返回
   const cached = doctorContractCache.get(cacheKey);
   if (cached) {
     return cached;
   }
-
+  // lyc: 如果pluginIds列表为空, 则以 cacheKey 为键向缓存中存储空列表, 返回空列表
   if (params?.pluginIds && params.pluginIds.length === 0) {
     doctorContractCache.set(cacheKey, []);
     return [];
   }
 
+  // lyc: 为 插件注册表(PluginRegistry) 加载 插件清单注册表(PluginManifestRegistry)
   const manifestRegistry = loadPluginManifestRegistryForPluginRegistry({
     workspaceDir: params?.workspaceDir,
     env,
@@ -303,6 +310,7 @@ function resolvePluginDoctorContracts(params?: {
   const entries: PluginDoctorContractEntry[] = [];
   const selectedPluginIds = params?.pluginIds ? new Set(params.pluginIds) : null;
   for (const record of manifestRegistry.plugins) {
+    // lyc: 如果指定了pluginIds列表, 且当前插件(record.id), 或其渠道(channelId) 或其提供者(providerId) 都不在pluginIds中, 则跳过当前插件
     if (
       selectedPluginIds &&
       !selectedPluginIds.has(record.id) &&
@@ -311,13 +319,16 @@ function resolvePluginDoctorContracts(params?: {
     ) {
       continue;
     }
+    // lyc: 加载当前插件的Doctor合同
     const entry = loadPluginDoctorContractEntry(record, baseCacheKey);
+    // lyc: 如果Doctor合同加载成功(entry!=null), 则将其添加到 Doctor合同对象列表(entries)中, 否则跳过当前插件
     if (entry) {
       entries.push(entry);
     }
   }
-
+  // lyc: 以 cacheKey 为键向缓存中存储 Doctor合同对象列表(entries)
   doctorContractCache.set(cacheKey, entries);
+  // lyc: 返回解析后的 Doctor合同对象列表
   return entries;
 }
 
@@ -327,6 +338,7 @@ export function clearPluginDoctorContractRegistryCache(): void {
   jitiLoaders.clear();
 }
 
+// lyc: 列出所有插件的兼容性配置规则
 export function listPluginDoctorLegacyConfigRules(params?: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;

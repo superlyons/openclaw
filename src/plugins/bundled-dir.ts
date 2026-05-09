@@ -129,11 +129,13 @@ function resolveBundledDirFromPackageRoot(
   return undefined;
 }
 
-/* lyc: 解析 捆绑|内置 插件所在目录
+/* lyc: 解析 捆绑|内置 插件所在目录 
+packageRoot: 以OPENCLAW_BUNDLED_PLUGINS_DIR|argv1|process.cwd|import.meta.url|node.exe所在目录 为基点查找 根package.json 所在的目录
+  packageRoot=根package.json, 它必须满足有name字段, 且name字段的值在 CORE_PACKAGE_NAMES 中即值为openclaw
 可能返回的值:
-  /tmp/openclaw-empty-bundled-plugins
+  /tmp/openclaw-empty-bundled-plugins 如果 env.OPENCLAW_DISABLE_BUNDLED_PLUGINS=true 返回该路径
   {packageRoot}/dist-runtime/extensions
-  {packageRoot}/packageRoot/dist/extensions
+  {packageRoot}/dist/extensions
   {packageRoot}/extensions
   {execDir}/dist/extensions
   {execDir}/extensions
@@ -143,7 +145,7 @@ function resolveBundledDirFromPackageRoot(
 如果 env.OPENCLAW_DISABLE_BUNDLED_PLUGINS=true 返回 /tmp/openclaw-empty-bundled-plugins
 如果指定了env.OPENCLAW_BUNDLED_PLUGINS_DIR, 
   env.OPENCLAW_BUNDLED_PLUGINS_DIR 路径存在, 则返回该路径的绝对地址
-  env.OPENCLAW_BUNDLED_PLUGINS_DIR 路径不存在 & 以argv1为基点找到根package.json 所在的目录 & 根package.json 所在的目录 不是 签出的源代码根目录 
+  env.OPENCLAW_BUNDLED_PLUGINS_DIR 路径不存在 & 以argv1为基点找到 根package.json 所在的目录 & 根package.json 所在的目录 不是 签出的源代码根目录 
     根package.json 所在的目录/dist-runtime/extensions 存在返回该路径, 否则
     根package.json 所在的目录/dist/extensions 存在返回该路径
   env.OPENCLAW_BUNDLED_PLUGINS_DIR路径不存在 & 上诉查找失败, 则返回env.OPENCLAW_BUNDLED_PLUGINS_DIR 的绝对地址

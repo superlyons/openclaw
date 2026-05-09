@@ -13,7 +13,7 @@ export type PluginCacheInputs = {
   loadPaths: string[];
 };
 
-// lyc: 解析插件源目录
+// lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
 export function resolvePluginSourceRoots(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
@@ -31,14 +31,17 @@ export function resolvePluginSourceRoots(params: {
 
 // Shared env-aware cache inputs for discovery, manifest, and loader caches.
 // lyc: 用于发现、清单和加载器缓存的共享环境感知缓存输入
-// lyc: 解析插件缓存输入
+/* lyc: 解析插件缓存输入: 由插件源根目录(roots|SourceRoots) 和 加载路径(loadPaths) 组成
+{ roots(插件源根目录): { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: openclaw的配置目录/extensions } , 
+ loadPaths(加载路径): [...]}
+ */
 export function resolvePluginCacheInputs(params: {
   workspaceDir?: string;
   loadPaths?: string[];
   env?: NodeJS.ProcessEnv;
 }): PluginCacheInputs {
   const env = params.env ?? process.env;
-  // lyc: 解析插件源目录 [stock, global, workspace]
+  // lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
   const roots = resolvePluginSourceRoots({
     workspaceDir: params.workspaceDir,
     env,

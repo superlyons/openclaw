@@ -94,7 +94,7 @@ function restoreInstallRecordMap(
   return restored;
 }
 
-// lyc: 从已安装插件索引(InstalledPluginInde)中提取插件安装记录(PluginInstallRecords)
+// lyc: 从已安装插件索引(InstalledPluginIndex ~/.openclaw/plugins/installs.json文件)中提取插件安装记录(PluginInstallRecord)
 // lyc: 从index.installRecords 或 index.plugins[].installRecord中提取安装记录
 export function extractPluginInstallRecordsFromInstalledPluginIndex(
   index: InstalledPluginIndex | null | undefined,
@@ -106,8 +106,8 @@ export function extractPluginInstallRecordsFromInstalledPluginIndex(
   }
   // lyc: index没有installRecords属性, 
   /* lyc: 对其plugins属性进行遍历, 提取安装记录
-    plugins类型为InstalledPluginIndexRecord[], 该类型有 installRecord?: InstalledPluginInstallRecordInfo属性
-    对plugins中每个插件installRecord属性进行深度拷贝并转换为PluginInstallRecord类型, 并存储到records中
+    plugins类型为 InstalledPluginIndexRecord[], 该类型有 installRecord?: InstalledPluginInstallRecordInfo 属性
+    对plugins中每个插件 installRecord 属性进行深度拷贝并转换为 PluginInstallRecord 类型, 并存储到 records 中
   */
   const records: Record<string, PluginInstallRecord> = {};
   for (const plugin of index?.plugins ?? []) {
