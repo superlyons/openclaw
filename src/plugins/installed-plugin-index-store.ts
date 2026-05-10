@@ -142,6 +142,7 @@ function parseInstalledPluginIndex(value: unknown): InstalledPluginIndex | null 
   const installRecords =
     copySafeInstallRecords(parsed.installRecords) ??
     copySafeInstallRecords(
+       // lyc: 从已安装插件索引中提取安装记录: 从 parsed.installRecords 或 parsed.plugins[].installRecord 中提取安装记录
       extractPluginInstallRecordsFromInstalledPluginIndex(parsed as InstalledPluginIndex),
     ) ??
     {};

@@ -57,6 +57,7 @@ function normalizeSlotValue(value: unknown): string | null | undefined {
   return trimmed;
 }
 
+// lyc: 规范化插件条目，entries为openclaw.json.plugins.entries
 function normalizePluginEntries(
   entries: unknown,
   normalizePluginId: NormalizePluginId,
@@ -141,20 +142,31 @@ function normalizePluginEntries(
   return normalized;
 }
 
+// lyc: 规范化插件配置，config为openclaw.json.plugins
 export function normalizePluginsConfigWithResolver(
   config?: OpenClawConfig["plugins"],
   normalizePluginId: NormalizePluginId = identityNormalizePluginId,
 ): NormalizedPluginsConfig {
+  // lyc: openclaw.json.plugins.slots.memory设置了字符串值，值不为”none"时返回该值，否则返回null(none时)或undefined
   const memorySlot = normalizeSlotValue(config?.slots?.memory);
+  // lyc: 通过openclaw.json.plugins的配置生成 NormalizedPluginsConfig 类型的实例
   return {
     enabled: config?.enabled !== false,
+    // lyc: 允许加载的pluginId列表
     allow: normalizeList(config?.allow, normalizePluginId),
+    // lyc: 拒绝加载的pluginId列表
     deny: normalizeList(config?.deny, normalizePluginId),
+    // lyc: 加载插件的路径列表
     loadPaths: normalizeList(config?.load?.paths, identityNormalizePluginId),
     slots: {
+      // lyc: "memory-core" 或 配置中设置的memory的值
+      // lyc: 代表哪个插件拥有该内存槽（“none”表示禁用内存插件）。
       memory: memorySlot === undefined ? defaultSlotIdForKey("memory") : memorySlot,
+      // lyc: 配置中设置的contextEngine的值，值不为”none"时返回该值，否则返回null(none时)或undefined
+      // lyc: 代表哪个插件拥有该上下文引擎槽。
       contextEngine: normalizeSlotValue(config?.slots?.contextEngine),
     },
+    // lyc: 规范化插件条目，entries为openclaw.json.plugins.entries
     entries: normalizePluginEntries(config?.entries, normalizePluginId),
   };
 }

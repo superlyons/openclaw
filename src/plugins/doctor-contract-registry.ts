@@ -299,7 +299,7 @@ function resolvePluginDoctorContracts(params?: {
     return [];
   }
 
-  // lyc: 为 插件注册表(PluginRegistry) 加载 插件清单注册表(PluginManifestRegistry)
+  // lyc: 为 插件注册表(PluginRegistry) 加载 插件清单注册表(manifestRegistry:PluginManifestRegistry)
   const manifestRegistry = loadPluginManifestRegistryForPluginRegistry({
     workspaceDir: params?.workspaceDir,
     env,
@@ -310,7 +310,7 @@ function resolvePluginDoctorContracts(params?: {
   const entries: PluginDoctorContractEntry[] = [];
   const selectedPluginIds = params?.pluginIds ? new Set(params.pluginIds) : null;
   for (const record of manifestRegistry.plugins) {
-    // lyc: 如果指定了pluginIds列表, 且当前插件(record.id), 或其渠道(channelId) 或其提供者(providerId) 都不在pluginIds中, 则跳过当前插件
+    // lyc: 如果入参指定了 pluginIds 列表, 且当前插件(record.id), 或其渠道(channelId) 或其提供者(providerId) 都不在 pluginIds 列表中, 则跳过当前插件
     if (
       selectedPluginIds &&
       !selectedPluginIds.has(record.id) &&

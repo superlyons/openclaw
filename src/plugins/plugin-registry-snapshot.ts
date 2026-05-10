@@ -204,7 +204,7 @@ export function loadPluginRegistrySnapshotWithMetadata(
     // lyc: 解析已安装插件索引, 即解析value(~/.openclaw/plugins/installs.json)为 InstalledPluginIndex 类型的实例, 并特别处理 installRecords 属性
     persistedIndex = readPersistedInstalledPluginIndexSync(params);
     // lyc: 持久化读取功能已启用(调用者和环境变量都没有禁用持久化插件注册表时为true) & 解析已安装插件索引(persistedIndex) 成功
-    // lyc: 对 解析已安装插件索引(persistedIndex) 进行策略、源、绑定件树的校验, 效验成功返回, 否则继续执行
+    // lyc: 对 解析已安装插件索引(persistedIndex) 进行策略、源、绑定件树的校验, 效验成功返回persistedIndex, 否则继续执行
     if (persistedReadsEnabled && persistedIndex) {
       if (
         params.config &&
@@ -276,7 +276,9 @@ export function loadPluginRegistrySnapshotWithMetadata(
     snapshot: loadInstalledPluginIndex({
       ...params,
       installRecords:
+        // lyc: 如果入参提供 installRecords 属性, 则优先使用入参提供的安装记录
         params.installRecords ??
+        // lyc: 从已安装插件索引中提取安装记录: 从 persistedIndex.installRecords 或 persistedIndex.plugins[].installRecord 中提取安装记录
         extractPluginInstallRecordsFromInstalledPluginIndex(persistedIndex),
     }),
     source: "derived",

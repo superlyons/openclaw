@@ -13,14 +13,18 @@ export type PluginCacheInputs = {
   loadPaths: string[];
 };
 
-// lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
+/* lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
+stock: 捆绑|内置 插件所在目录 | OpenClaw插件的捆绑根目录, 一般在 packageRoot/dist-runtime|dist|""/extensions
+global: OpenClaw全局插件目录， 一般在 openclaw的配置目录/extensions
+workspace: OpenClaw工作空间插件目录， 一般在 工作空间目录/.openclaw/extensions
+*/
 export function resolvePluginSourceRoots(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): PluginSourceRoots {
   const env = params.env ?? process.env;
   const workspaceRoot = params.workspaceDir ? resolveUserPath(params.workspaceDir, env) : undefined;
-  // lyc: 解析 捆绑|内置 插件所在目录
+  // lyc: 解析 捆绑|内置 插件所在目录 | OpenClaw插件的捆绑根目录
   const stock = resolveBundledPluginsDir(env);
   // lyc: openclaw的配置目录/extensions
   const global = path.join(resolveConfigDir(env), "extensions");
@@ -32,7 +36,7 @@ export function resolvePluginSourceRoots(params: {
 // Shared env-aware cache inputs for discovery, manifest, and loader caches.
 // lyc: 用于发现、清单和加载器缓存的共享环境感知缓存输入
 /* lyc: 解析插件缓存输入: 由插件源根目录(roots|SourceRoots) 和 加载路径(loadPaths) 组成
-{ roots(插件源根目录): { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: openclaw的配置目录/extensions } , 
+{ roots(插件源根目录): { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions } , 
  loadPaths(加载路径): [...]}
  */
 export function resolvePluginCacheInputs(params: {

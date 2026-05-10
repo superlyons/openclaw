@@ -49,7 +49,7 @@ function normalizeInstallRecord(
 }
 
 /*lyc: 恢复安装记录, 必须设置source属性值, 深度拷贝并将类型转换为 PluginInstallRecord 类型
-record必须设置了source属性值, 否则返回undefined, 
+record 必须设置了 source  属性值, 否则返回undefined, 
 对record进行深拷贝, 避免修改原始record
 对深度拷贝的record进行 PluginInstallRecord 类型转换, 入参 record 为 InstalledPluginInstallRecordInfo 类型
 */
@@ -94,7 +94,7 @@ function restoreInstallRecordMap(
   return restored;
 }
 
-// lyc: 从已安装插件索引(InstalledPluginIndex ~/.openclaw/plugins/installs.json文件)中提取插件安装记录(PluginInstallRecord)
+// lyc: 从index 已安装插件索引(InstalledPluginIndex ~/.openclaw/plugins/installs.json文件)中提取 installRecords|plugins[].installRecord(PluginInstallRecord 插件安装记录)
 // lyc: 从index.installRecords 或 index.plugins[].installRecord中提取安装记录
 export function extractPluginInstallRecordsFromInstalledPluginIndex(
   index: InstalledPluginIndex | null | undefined,

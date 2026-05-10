@@ -24,6 +24,7 @@ export type PluginActivationState = PluginActivationStateLike;
 
 export type NormalizedPluginsConfig = SharedNormalizedPluginsConfig;
 
+// lyc: 规范化插件配置，config为openclaw.json.plugins
 export function normalizePluginsConfigWithResolver(
   config?: OpenClawConfig["plugins"],
   normalizePluginId: NormalizePluginId = identityNormalizePluginId,

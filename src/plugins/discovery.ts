@@ -73,6 +73,7 @@ export function clearPluginDiscoveryCache(): void {
   discoveryCache.clear();
 }
 
+// lyc: 解析插件发现缓存过期时间, 从env.OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS 中获取
 function resolveDiscoveryCacheMs(env: NodeJS.ProcessEnv): number {
   const raw = env.OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS?.trim();
   if (raw === "" || raw === "0") {
@@ -88,6 +89,7 @@ function resolveDiscoveryCacheMs(env: NodeJS.ProcessEnv): number {
   return Math.max(0, parsed);
 }
 
+// lyc: 是否启用插件发现缓存, 从env.OPENCLAW_DISABLE_PLUGIN_DISCOVERY_CACHE 和 OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS 中判断
 function shouldUseDiscoveryCache(env: NodeJS.ProcessEnv): boolean {
   const disabled = env.OPENCLAW_DISABLE_PLUGIN_DISCOVERY_CACHE?.trim();
   if (disabled) {
@@ -96,6 +98,7 @@ function shouldUseDiscoveryCache(env: NodeJS.ProcessEnv): boolean {
   return resolveDiscoveryCacheMs(env) > 0;
 }
 
+// lyc: 构建作用域发现缓存键
 function buildScopedDiscoveryCacheKey(params: {
   workspaceDir?: string;
   extraPaths?: string[];
@@ -416,12 +419,14 @@ function mergeDiscoveryResult(
   target.diagnostics.push(...source.diagnostics);
 }
 
+// lyc: 获取以缓存的插件发现结果
 function getCachedDiscoveryResult(params: {
   cacheEnabled: boolean;
   cacheKey: string;
   env: NodeJS.ProcessEnv;
   load: () => PluginDiscoveryResult;
 }): PluginDiscoveryResult {
+  // lyc: 解析插件发现缓存过期时间, 从env.OPENCLAW_PLUGIN_DISCOVERY_CACHE_MS 中获取
   const ttl = resolveDiscoveryCacheMs(params.env);
   if (params.cacheEnabled) {
     const cached = discoveryCache.get(params.cacheKey);
@@ -436,6 +441,7 @@ function getCachedDiscoveryResult(params: {
   return result;
 }
 
+// lyc: 读取插件清单文件(dir/package.json), 并解析为 PackageManifest 类型
 function readPackageManifest(
   dir: string,
   rejectHardlinks = true,
@@ -771,6 +777,7 @@ function discoverInDirectory(params: {
   }
 }
 
+// lyc: 在指定的路径(rawPath)中发现插件
 function discoverFromPath(params: {
   rawPath: string;
   origin: PluginOrigin;
@@ -819,9 +826,15 @@ function discoverFromPath(params: {
 
   if (stat.isDirectory()) {
     const rejectHardlinks = params.origin !== "bundled";
+    // lyc: resolved 的真实路径, 并缓存到 realpathCache 中, resolved使用path.resolve(), 这里使用fs.realpathSync() 它们存在本质的区别
+    // lyc: path.resolve() 不实际操作文件系统只是在路径字符上进行解析，不会验证路径是否存在, 不会解析符号链接, 返回解析后的绝对路径
+    // lyc: fs.realpathSync() 实际会操作文件系统检查路径是否真实存在, 会解析软连接或快捷方式, 返回解析后的绝对路径
     const resolvedRealPath = safeRealpathSync(resolved, params.realpathCache) ?? undefined;
+    // lyc: 读取插件清单文件(resolved/package.json), 并解析为 PackageManifest 类型
     const manifest = readPackageManifest(resolved, rejectHardlinks, resolvedRealPath);
+    // lyc: 从插件清单文件中提取扩展目录列表(resolved/package.json.openclaw.extensions)并返回{status: "ok", entries: [extensions列表]}
     const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
+    // lyc: 代表扩展目录列表(resolved/package.json.openclaw.extensions)
     const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
     const manifestId = resolveIdHintManifestId(resolved, rejectHardlinks, resolvedRealPath);
     const setupSource = resolvePackageSetupSource({
@@ -921,20 +934,25 @@ function discoverFromPath(params: {
   }
 }
 
+// lyc: 发现OpenClaw插件
 export function discoverOpenClawPlugins(params: {
   workspaceDir?: string;
+  // lyc: 一般为openclaw.json.plugins.load.paths中的路径
   extraPaths?: string[];
   ownershipUid?: number | null;
   cache?: boolean;
   env?: NodeJS.ProcessEnv;
 }): PluginDiscoveryResult {
   const env = params.env ?? process.env;
+  // lyc: 是否启用插件发现缓存
   const cacheEnabled = params.cache !== false && shouldUseDiscoveryCache(env);
   const workspaceDir = normalizeOptionalString(params.workspaceDir);
   const workspaceRoot = workspaceDir ? resolveUserPath(workspaceDir, env) : undefined;
+  // lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
   const roots = resolvePluginSourceRoots({ workspaceDir: workspaceRoot, env });
   const scopedResult = getCachedDiscoveryResult({
     cacheEnabled,
+    // lyc: 构建作用域发现缓存键
     cacheKey: buildScopedDiscoveryCacheKey({
       workspaceDir: params.workspaceDir,
       extraPaths: params.extraPaths,
@@ -946,6 +964,7 @@ export function discoverOpenClawPlugins(params: {
       const result = createDiscoveryResult();
       const seen = new Set<string>();
       const realpathCache = new Map<string, string>();
+      // lyc: 一般为openclaw.json.plugins.load.paths中的路径
       const extra = params.extraPaths ?? [];
       for (const extraPath of extra) {
         if (typeof extraPath !== "string") {
@@ -955,18 +974,22 @@ export function discoverOpenClawPlugins(params: {
         if (!trimmed) {
           continue;
         }
+        // lyc: 解析OpenClaw插件的捆绑加载路径别名
         const bundledAlias = resolvePackagedBundledLoadPathAlias({
           bundledRoot: roots.stock,
           loadPath: resolveUserPath(trimmed, env),
         });
+        // lyc: 如果loadPath在OpenClaw插件的捆绑加载路径中, 则忽略
         if (bundledAlias) {
           result.diagnostics.push({
             level: "warn",
             source: trimmed,
+            // lyc: 忽略了指向OpenClaw current当前 | legacy遗留 捆绑插件目录的plugins.load.paths条目；请删除此冗余路径或运行openclaw doctor --fix
             message: `ignored plugins.load.paths entry that points at OpenClaw's ${bundledAlias.kind} bundled plugin directory; remove this redundant path or run openclaw doctor --fix`,
           });
           continue;
         }
+        // lyc: 在指定的路径(rawPath)中发现插件
         discoverFromPath({
           rawPath: trimmed,
           origin: "config",
@@ -979,15 +1002,19 @@ export function discoverOpenClawPlugins(params: {
           realpathCache,
         });
       }
+      // lyc: workspaceRoot(入参workspaceDir) 是否是 OpenClaw插件的捆绑根目录(roots.stock)
       const workspaceMatchesBundledRoot = resolvesToSameDirectory(
         workspaceRoot,
         roots.stock,
         realpathCache,
       );
+      // lyc: 如果workspaceRoot不是OpenClaw插件的捆绑根目录(roots.stock) 且 workspaceRoot(入参workspaceDir) 和 roots.workspace(工作空间目录/.openclaw/extensions) 有值
       if (roots.workspace && workspaceRoot && !workspaceMatchesBundledRoot) {
         // Keep workspace auto-discovery constrained to the OpenClaw extensions root.
         // Recursively scanning the full workspace treats arbitrary project folders as
         // plugin candidates and causes noisy "plugin manifest not found" validation failures.
+        // lyc: 将工作区自动发现限制在OpenClaw扩展的根目录内(OpenClaw插件的捆绑根目录(roots.stock))。
+        // lyc: 递归扫描整个工作区会将任意项目文件夹视为插件候选对象，从而导致“未找到插件清单”的验证失败提示。
         discoverInDirectory({
           dir: roots.workspace,
           origin: "workspace",

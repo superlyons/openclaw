@@ -18,6 +18,7 @@ export function resolveEffectiveHomeDir(
   homedir: () => string = os.homedir,
 ): string | undefined {
   const raw = resolveRawHomeDir(env, homedir);
+  // lyc: path.resolve()不实际操作文件系统只是在路径字符上进行解析，不会验证路径是否存在, 不会解析符号链接, 返回解析后的绝对路径
   return raw ? path.resolve(raw) : undefined;
 }
 
@@ -85,6 +86,7 @@ export function resolveRequiredHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
+  // lyc: path.resolve()不实际操作文件系统只是在路径字符上进行解析，不会验证路径是否存在, 不会解析符号链接, 返回解析后的绝对路径
   return resolveEffectiveHomeDir(env, homedir) ?? path.resolve(process.cwd());
 }
 
@@ -115,7 +117,8 @@ export function expandHomePrefix(
   return input.replace(/^~(?=$|[\\/])/, home);
 }
 
-// lyc: 为input路径解析~目录并返回绝对路径
+// lyc: 为input路径解析~目录并返回绝对路径, 
+// lyc: path.resolve()不实际操作文件系统只是在路径字符上进行解析，不会验证路径是否存在, 不会解析符号链接, 返回解析后的绝对路径
 export function resolveHomeRelativePath(
   input: string,
   opts?: {

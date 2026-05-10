@@ -196,6 +196,7 @@ function resolveManifestCacheMs(env: NodeJS.ProcessEnv): number {
   return Math.max(0, parsed);
 }
 
+// lyc: 是否启用插件清单注册表缓存, 从env.OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE 和 OPENCLAW_PLUGIN_MANIFEST_CACHE_MS 中判断
 function shouldUseManifestCache(env: NodeJS.ProcessEnv): boolean {
   const disabled = env.OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE?.trim();
   if (disabled) {
@@ -204,11 +205,13 @@ function shouldUseManifestCache(env: NodeJS.ProcessEnv): boolean {
   return resolveManifestCacheMs(env) > 0;
 }
 
+// lyc: 构建插件清单注册表缓存键
 function buildCacheKey(params: {
   workspaceDir?: string;
   plugins: NormalizedPluginsConfig;
   env: NodeJS.ProcessEnv;
 }): string {
+  // lyc: roots(插件源根目录): { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }, loadPaths(加载路径): [...loadPaths]}
   const { roots, loadPaths } = resolvePluginCacheInputs({
     workspaceDir: params.workspaceDir,
     loadPaths: params.plugins.loadPaths,
@@ -220,6 +223,8 @@ function buildCacheKey(params: {
   const runtimeServiceVersion = resolveCompatibilityHostVersion(params.env);
   // The manifest registry only depends on where plugins are discovered from (workspace + load paths).
   // It does not depend on allow/deny/entries enable-state, so exclude those for higher cache hit rates.
+  // lyc: 清单注册表仅依赖于插件的发现位置（workspace + load paths）
+  // lyc: 它不依赖于allow/deny/entries的启用状态，因此为了获得更高的缓存命中率，排除了这些因素
   return `${workspaceKey}::${configExtensionsRoot}::${bundledRoot}::${runtimeServiceVersion}::${JSON.stringify(loadPaths)}`;
 }
 
@@ -586,6 +591,7 @@ function isIntentionalInstalledBundledDuplicate(params: {
   );
 }
 
+// lyc: 加载插件清单注册表(PluginManifestRegistry)
 export function loadPluginManifestRegistry(
   params: {
     config?: OpenClawConfig;
@@ -599,14 +605,19 @@ export function loadPluginManifestRegistry(
   } = {},
 ): PluginManifestRegistry {
   const config = params.config ?? {};
+  // lyc: 规范化插件配置，config。plugins为openclaw.json.plugins
   const normalized = normalizePluginsConfigWithResolver(config.plugins);
   const env = params.env ?? process.env;
+  // lyc: 构建插件清单注册表缓存键
   const cacheKey = buildCacheKey({ workspaceDir: params.workspaceDir, plugins: normalized, env });
+  // lyc: params.cache=true && 入参没有提供installRecords && 入参没有提供bundledChannelConfigCollector回调函数
   const cacheEnabled =
     params.cache !== false &&
     !params.installRecords &&
     !params.bundledChannelConfigCollector &&
+    // lyc: 是否启用插件清单注册表缓存, 从env.OPENCLAW_DISABLE_PLUGIN_MANIFEST_CACHE 和 OPENCLAW_PLUGIN_MANIFEST_CACHE_MS 中判断
     shouldUseManifestCache(env);
+  // lyc: 如果缓存启用，且缓存未过期，则直接返回缓存中的注册表
   if (cacheEnabled) {
     const cached = registryCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {

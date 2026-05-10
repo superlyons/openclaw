@@ -697,6 +697,8 @@ function normalizeManifestModelPricingSource(
   return Object.keys(source).length > 0 ? source : undefined;
 }
 
+// lyc: 规范化 模型目录定价配置中的提供者配置列表中的一个提供者配置(providerPolicy: rootDir/openclaw.plugin.json.modelPricing.providers{providerId:providerPolicy,...})
+// lyc: 返回入参ownedProviders中包含的 提供者配置列表
 function normalizeManifestModelPricingProvider(
   value: unknown,
 ): PluginManifestModelPricingProvider | undefined {
@@ -713,6 +715,9 @@ function normalizeManifestModelPricingProvider(
   return Object.keys(policy).length > 0 ? policy : undefined;
 }
 
+// lyc: 规范化 模型目录定价配置中的 提供者模型定价配置列表(rootDir/openclaw.plugin.json.modelPricing.providers{}) 
+// lyc: 返回入参ownedProviders中包含的 提供者模型定价配置列表
+// lyc: 注意入参 模型目录定价配置(rootDir/openclaw.plugin.json.modelPricing) 返回的是提供者模型定价配置列表
 function normalizeManifestModelPricing(
   value: unknown,
   params: { ownedProviders: ReadonlySet<string> },
@@ -1170,7 +1175,7 @@ export function loadPluginManifest(
     rejectHardlinks,
   });
   if (!opened.ok) {
-    // lyc: 根据opened.reason返回错误信息, 即path和fallback返回的信息
+    // lyc: 根据opened.reason返回错误信息, 即入参path和fallback函数返回的信息
     return matchBoundaryFileOpenFailure(opened, {
       path: () => ({
         ok: false,
@@ -1184,6 +1189,7 @@ export function loadPluginManifest(
       }),
     });
   }
+  // lyc: 解析rootDir/openclaw.plugin.json 文件为JSON对象
   let raw: unknown;
   try {
     raw = JSON5.parse(fs.readFileSync(opened.fd, "utf-8"));
@@ -1212,7 +1218,7 @@ export function loadPluginManifest(
   const enabledByDefault = raw.enabledByDefault === true;
   // lyc: legacyPluginIds: 旧插件ID列表, 用于兼容旧插件
   const legacyPluginIds = normalizeTrimmedStringList(raw.legacyPluginIds);
-  // lyc: 当配置提供者时自动启用 的配置提供者列表
+  // lyc: 当配置了那些提供者时自动启用插件: 自动启用插件的提供者列表
   const autoEnableWhenConfiguredProviders = normalizeTrimmedStringList(
     raw.autoEnableWhenConfiguredProviders,
   );
@@ -1222,11 +1228,13 @@ export function loadPluginManifest(
   const channels = normalizeTrimmedStringList(raw.channels);
   const providers = normalizeTrimmedStringList(raw.providers);
   const providerDiscoveryEntry = normalizeOptionalString(raw.providerDiscoveryEntry);
-  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);‘
-  // lyc: modelCatalog中相关属性值必须包含providers中的提供者
+  const modelSupport = normalizeManifestModelSupport(raw.modelSupport);
+  // lyc: 规范化模型目录提供者列表(rootDir/openclaw.plugin.json.modelCatalog.providers{}) 返回入参ownedProviders中包含的提供者配置列表
   const modelCatalog = normalizeModelCatalog(raw.modelCatalog, {
+    // lyc: ownedProviders = rootDir/openclaw.plugin.json.providers
     ownedProviders: new Set(providers),
   });
+  // lyc: 规范化模型目录模型定价配置中的 提供者模型定价配置列表(rootDir/openclaw.plugin.json.modelPricing.providers{}) 返回入参ownedProviders中包含的提供者模型定价配置列表
   const modelPricing = normalizeManifestModelPricing(raw.modelPricing, {
     ownedProviders: new Set(providers),
   });
@@ -1422,9 +1430,11 @@ export function getPackageManifestMetadata(
   return manifest[MANIFEST_KEY];
 }
 
+// lyc: 从插件清单文件中提取扩展目录列表(package.json.openclaw.extensions)
 export function resolvePackageExtensionEntries(
   manifest: PackageManifest | undefined,
 ): PackageExtensionResolution {
+  // lyc: 从插件清单文件中提取扩展目录列表(package.json.openclaw.extensions)
   const raw = getPackageManifestMetadata(manifest)?.extensions;
   if (!Array.isArray(raw)) {
     return { status: "missing", entries: [] };
