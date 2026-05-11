@@ -500,6 +500,7 @@ function deriveIdHint(params: {
   return `${normalizedPackageId}/${base}`;
 }
 
+// lyc: 从插件清单文件(rootDir/openclaw.plugin.json)中解析插件ID
 function resolveIdHintManifestId(
   rootDir: string,
   rejectHardlinks: boolean,

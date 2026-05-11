@@ -715,10 +715,12 @@ function normalizeManifestModelPricingProvider(
   return Object.keys(policy).length > 0 ? policy : undefined;
 }
 
-// lyc: 规范化 模型目录定价配置中的 提供者模型定价配置列表(rootDir/openclaw.plugin.json.modelPricing.providers{}) 
-// lyc: 返回入参ownedProviders中包含的 提供者模型定价配置列表
-// lyc: 注意入参 模型目录定价配置(rootDir/openclaw.plugin.json.modelPricing) 返回的是提供者模型定价配置列表
+/* lyc: 规范化 模型定价配置(rootDir/openclaw.plugin.json.modelPricing) 
+返回入参ownedProviders中包含的 提供者模型定价配置列表
+因为 模型定价配置modelPricing 只有一个providers字段(提供者模型定价配置列表), 所以叫 模型定价配置中的 提供者模型定价配置列表
+*/
 function normalizeManifestModelPricing(
+  // lyc: value = 模型定价配置(rootDir/openclaw.plugin.json.modelPricing)
   value: unknown,
   params: { ownedProviders: ReadonlySet<string> },
 ): PluginManifestModelPricing | undefined {
@@ -765,6 +767,8 @@ function normalizeManifestModelIdPrefixRules(
   return rules.length > 0 ? rules : undefined;
 }
 
+// lyc: 规范化 模型目录模型ID归配置中的 提供者模型ID归配置列表中的一个提供者配置(providerPolicy: rootDir/openclaw.plugin.json.modelIdNormalization.providers{providerId:providerPolicy,...})
+// lyc: 返回入参ownedProviders中包含的 提供者模型ID归配置列表
 function normalizeManifestModelIdNormalizationProvider(
   value: unknown,
 ): PluginManifestModelIdNormalizationProvider | undefined {
@@ -797,7 +801,12 @@ function normalizeManifestModelIdNormalizationProvider(
   return Object.keys(normalization).length > 0 ? normalization : undefined;
 }
 
+/* lyc: 规范化 模型ID标准化配置(rootDir/openclaw.plugin.json.modelIdNormalization) 
+返回入参ownedProviders中包含的 提供者模型ID标准化配置列表
+因为 模型ID标准化配置modelIdNormalization 只有一个providers字段(提供者模型ID标准化配置列表), 所以叫 模型ID标准化配置中的 提供者模型ID标准化配置列表
+*/
 function normalizeManifestModelIdNormalization(
+  // lyc: value = 模型ID标准化配置(rootDir/openclaw.plugin.json.modelIdNormalization)
   value: unknown,
   params: { ownedProviders: ReadonlySet<string> },
 ): PluginManifestModelIdNormalization | undefined {
@@ -823,7 +832,11 @@ function normalizeManifestModelIdNormalization(
   return Object.keys(providers).length > 0 ? { providers } : undefined;
 }
 
+/* lyc: 规范化 模型目录.提供者端点(rootDir/openclaw.plugin.json.providerEndpoints)
+返回入参ownedProviders中包含的 提供者端点列表
+*/
 function normalizeManifestProviderEndpoints(
+  // lyc: value = 模型目录提供者端点(rootDir/openclaw.plugin.json.providerEndpoints)
   value: unknown,
 ): PluginManifestProviderEndpoint[] | undefined {
   if (!Array.isArray(value)) {
@@ -888,7 +901,11 @@ function normalizeManifestProviderRequestProvider(
   return Object.keys(providerRequest).length > 0 ? providerRequest : undefined;
 }
 
+/* lyc: 规范化 模型目录.提供者请求(rootDir/openclaw.plugin.json.providerRequest)
+返回入参ownedProviders中包含的 提供者请求列表
+*/
 function normalizeManifestProviderRequest(
+  // lyc: value = 模型目录提供者请求(rootDir/openclaw.plugin.json.providerRequest)
   value: unknown,
   params: { ownedProviders: ReadonlySet<string> },
 ): PluginManifestProviderRequest | undefined {
@@ -1157,7 +1174,7 @@ function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   return undefined;
 }
 
-// lyc: 加载插件元数据 rootDir/openclaw.plugin.json 文件，未完全看完代码
+// lyc: 加载插件清单|元数据: rootDir/openclaw.plugin.json 文件
 export function loadPluginManifest(
   rootDir: string,
   rejectHardlinks = true,
@@ -1229,25 +1246,32 @@ export function loadPluginManifest(
   const providers = normalizeTrimmedStringList(raw.providers);
   const providerDiscoveryEntry = normalizeOptionalString(raw.providerDiscoveryEntry);
   const modelSupport = normalizeManifestModelSupport(raw.modelSupport);
-  // lyc: 规范化模型目录提供者列表(rootDir/openclaw.plugin.json.modelCatalog.providers{}) 返回入参ownedProviders中包含的提供者配置列表
+  // lyc: 规范化 模型目录(rootDir/openclaw.plugin.json.modelCatalog) 返回入参ownedProviders中包含的提供者配置列表
   const modelCatalog = normalizeModelCatalog(raw.modelCatalog, {
     // lyc: ownedProviders = rootDir/openclaw.plugin.json.providers
     ownedProviders: new Set(providers),
   });
-  // lyc: 规范化模型目录模型定价配置中的 提供者模型定价配置列表(rootDir/openclaw.plugin.json.modelPricing.providers{}) 返回入参ownedProviders中包含的提供者模型定价配置列表
+  // lyc: 规范化 模型定价配置(rootDir/openclaw.plugin.json.modelPricing) 返回入参ownedProviders中包含的 提供者模型定价配置列表
   const modelPricing = normalizeManifestModelPricing(raw.modelPricing, {
+    // lyc: ownedProviders = rootDir/openclaw.plugin.json.providers
     ownedProviders: new Set(providers),
   });
+  // lyc: 规范化 模型ID标准化配置(rootDir/openclaw.plugin.json.modelIdNormalization) 返回入参ownedProviders中包含的 提供者模型ID标准化配置列表
   const modelIdNormalization = normalizeManifestModelIdNormalization(raw.modelIdNormalization, {
+    // lyc: ownedProviders = rootDir/openclaw.plugin.json.providers
     ownedProviders: new Set(providers),
   });
+  // lyc: 规范化 提供者端点(rootDir/openclaw.plugin.json.providerEndpoints)
   const providerEndpoints = normalizeManifestProviderEndpoints(raw.providerEndpoints);
+  // lyc: 规范化 提供者请求(rootDir/openclaw.plugin.json.providerRequest)  返回入参ownedProviders中包含的提供者请求列表
   const providerRequest = normalizeManifestProviderRequest(raw.providerRequest, {
+    // lyc: ownedProviders = rootDir/openclaw.plugin.json.providers
     ownedProviders: new Set(providers),
   });
   const cliBackends = normalizeTrimmedStringList(raw.cliBackends);
   const syntheticAuthRefs = normalizeTrimmedStringList(raw.syntheticAuthRefs);
   const nonSecretAuthMarkers = normalizeTrimmedStringList(raw.nonSecretAuthMarkers);
+  // lyc: 规范化 命令别名(rootDir/openclaw.plugin.json.commandAliases)
   const commandAliases = normalizeManifestCommandAliases(raw.commandAliases);
   const providerAuthEnvVars = normalizeStringListRecord(raw.providerAuthEnvVars);
   const providerAuthAliases = normalizeStringRecord(raw.providerAuthAliases);

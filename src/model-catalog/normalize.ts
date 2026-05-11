@@ -314,6 +314,7 @@ function normalizeModelCatalogProvider(value: unknown): ModelCatalogProvider | u
 function normalizeModelCatalogProviders(
   value: unknown,
   ownedProviders: ReadonlySet<string>,
+// lyc: Record的键是providerId, 值是提供者配置 ModelCatalogProvider
 ): Record<string, ModelCatalogProvider> | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -337,14 +338,19 @@ function normalizeModelCatalogProviders(
   return Object.keys(providers).length > 0 ? providers : undefined;
 }
 
+// lyc: 规范化 模型目录别名列表(rootDir/openclaw.plugin.json.modelCatalog.aliases{})
+// lyc: 返回入参ownedProviders中包含的别名配置列表
 function normalizeModelCatalogAliases(
   value: unknown,
   ownedProviders: ReadonlySet<string>,
+// lyc: Record的键是providerId, 值是别名配置 ModelCatalogAlias
 ): Record<string, ModelCatalogAlias> | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
   const aliases: Record<string, ModelCatalogAlias> = {};
+  // lyc: 模型目录别名列表aliases是对象, 键providerId, 值是配置
+  // lyc: aliases = { providerId: {provider:string,...}, providerId:..., ...}
   for (const [rawAlias, rawTarget] of Object.entries(value)) {
     const alias = normalizeModelCatalogProviderId(rawAlias);
     if (!alias || !isRecord(rawTarget)) {
@@ -367,6 +373,7 @@ function normalizeModelCatalogAliases(
   return Object.keys(aliases).length > 0 ? aliases : undefined;
 }
 
+// lyc: 规范化 模型目录抑制列表(rootDir/openclaw.plugin.json.modelCatalog.suppressions[])
 function normalizeModelCatalogSuppressions(value: unknown): ModelCatalogSuppression[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -391,9 +398,12 @@ function normalizeModelCatalogSuppressions(value: unknown): ModelCatalogSuppress
   return suppressions.length > 0 ? suppressions : undefined;
 }
 
+// lyc: 规范化 模型目录发现列表(rootDir/openclaw.plugin.json.modelCatalog.discovery{})
+// lyc: 返回入参ownedProviders中包含的发现配置列表
 function normalizeModelCatalogDiscovery(
   value: unknown,
   ownedProviders: ReadonlySet<string>,
+// lyc: Record的键是providerId, 值可能得值是 "static"静态的, "refreshable"可刷新的, "runtime"运行时的
 ): Record<string, ModelCatalogDiscovery> | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -402,6 +412,7 @@ function normalizeModelCatalogDiscovery(
   for (const [rawProviderId, rawMode] of Object.entries(value)) {
     const providerId = normalizeModelCatalogProviderId(rawProviderId);
     const mode = normalizeOptionalString(rawMode) ?? "";
+    // lyc: mode 可能的值 "static"静态的, "refreshable"可刷新的, "runtime"运行时的
     if (providerId && ownedProviders.has(providerId) && MODEL_CATALOG_DISCOVERY_MODES.has(mode)) {
       discovery[providerId] = mode as ModelCatalogDiscovery;
     }
@@ -411,6 +422,7 @@ function normalizeModelCatalogDiscovery(
 
 // lyc: 规范化 模型目录(rootDir/openclaw.plugin.json.modelCatalog)
 export function normalizeModelCatalog(
+  // lyc: value = 模型目录(rootDir/openclaw.plugin.json.modelCatalog)
   value: unknown,
   params: { ownedProviders: ReadonlySet<string> },
 ): ModelCatalog | undefined {
@@ -419,9 +431,16 @@ export function normalizeModelCatalog(
   }
   // lyc: 以拥有的提供者列表(ownedProviders) = 标准化后的入参params.ownedProviders, 一般值为 rootDir/openclaw.plugin.json.providers
   const ownedProviders = normalizeOwnedProviderSet(params.ownedProviders);
+  // lyc: 规范化 value.providers: 模型目录提供者列表(rootDir/openclaw.plugin.json.modelCatalog.providers{})
+  // lyc: 返回入参ownedProviders中包含的提供者配置列表
   const providers = normalizeModelCatalogProviders(value.providers, ownedProviders);
+  // lyc: 规范化 value.aliases: 模型目录别名列表(rootDir/openclaw.plugin.json.modelCatalog.aliases{})
+  // lyc: 返回入参ownedProviders中包含的 模型目录别名列表
   const aliases = normalizeModelCatalogAliases(value.aliases, ownedProviders);
+  // lyc: 规范化 value.suppressions: 模型目录抑制列表(rootDir/openclaw.plugin.json.modelCatalog.suppressions[])
   const suppressions = normalizeModelCatalogSuppressions(value.suppressions);
+  // lyc: 规范化 value.discovery: 模型目录发现列表(rootDir/openclaw.plugin.json.modelCatalog.discovery{})
+  // lyc: 返回入参ownedProviders中包含的 模型目录发现列表
   const discovery = normalizeModelCatalogDiscovery(value.discovery, ownedProviders);
   const catalog = {
     ...(providers ? { providers } : {}),

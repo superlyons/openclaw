@@ -26,6 +26,7 @@ export type PluginManifestCommandAliasRegistry = {
   }[];
 };
 
+// lyc: 规范化 命令别名(rootDir/openclaw.plugin.json.commandAliases)
 export function normalizeManifestCommandAliases(
   value: unknown,
 ): PluginManifestCommandAlias[] | undefined {
