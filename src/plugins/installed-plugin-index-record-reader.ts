@@ -30,7 +30,10 @@ function readRecordMap(value: unknown): Record<string, PluginInstallRecord> | nu
   return records;
 }
 
+/* lyc: 从已保存的已安装插件索引(index ~/.openclaw/plugins/installs.json)中提取插件安装记录(index.installRecords|index.plugins[].installRecord)
+*/
 export function extractPluginInstallRecordsFromPersistedInstalledPluginIndex(
+  // lyc: ~/.openclaw/plugins/installs.json的json对象
   index: unknown,
 ): Record<string, PluginInstallRecord> | null {
   if (!isRecord(index) || !Array.isArray(index.plugins)) {
@@ -56,11 +59,14 @@ export async function readPersistedInstalledPluginIndexInstallRecords(
   return extractPluginInstallRecordsFromPersistedInstalledPluginIndex(parsed);
 }
 
+// lyc: 读取已安装插件索引(~/.openclaw/plugins/installs.json)的安装记录(.installRecords|.plugins[].installRecord)
 export function readPersistedInstalledPluginIndexInstallRecordsSync(
   options: InstalledPluginIndexStoreOptions = {},
 ): Record<string, PluginInstallRecord> | null {
+  // lyc: ~/.openclaw/plugins/installs.json的json对象
   const parsed = readJsonFileSync(resolveInstalledPluginIndexStorePath(options));
-  return extractPluginInstallRecordsFromPersistedInstalledPluginIndex(parsed);
+  // lyc: 从已保存的已安装插件索引中提取插件安装记录
+   return extractPluginInstallRecordsFromPersistedInstalledPluginIndex(parsed);
 }
 
 export async function loadInstalledPluginIndexInstallRecords(

@@ -527,7 +527,7 @@ function normalizeMediaUnderstandingProviderMetadata(
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
-
+// lyc: 规范化 清单合同(rootDir/openclaw.plugin.json.contracts)
 function normalizeManifestContracts(value: unknown): PluginManifestContracts | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -931,6 +931,7 @@ function normalizeManifestProviderRequest(
   return Object.keys(providers).length > 0 ? { providers } : undefined;
 }
 
+// lyc: 规范化 清单激活(rootDir/openclaw.plugin.json.activation)
 function normalizeManifestActivation(value: unknown): PluginManifestActivation | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -988,7 +989,7 @@ function normalizeManifestSetupProviders(
   }
   return normalized.length > 0 ? normalized : undefined;
 }
-
+// lyc: 规范化 插件设置(rootDir/openclaw.plugin.json.setup)
 function normalizeManifestSetup(value: unknown): PluginManifestSetup | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -1006,7 +1007,7 @@ function normalizeManifestSetup(value: unknown): PluginManifestSetup | undefined
   } satisfies PluginManifestSetup;
   return Object.keys(setup).length > 0 ? setup : undefined;
 }
-
+// lyc: 规范化 清单QA运行(rootDir/openclaw.plugin.json.qaRunners)
 function normalizeManifestQaRunners(value: unknown): PluginManifestQaRunner[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1029,6 +1030,7 @@ function normalizeManifestQaRunners(value: unknown): PluginManifestQaRunner[] | 
   return normalized.length > 0 ? normalized : undefined;
 }
 
+// lyc: 规范化 提供者认证选择(rootDir/openclaw.plugin.json.providerAuthChoices)
 function normalizeProviderAuthChoices(
   value: unknown,
 ): PluginManifestProviderAuthChoice[] | undefined {
@@ -1174,15 +1176,15 @@ function parsePluginKind(raw: unknown): PluginKind | PluginKind[] | undefined {
   return undefined;
 }
 
-// lyc: 加载插件清单|元数据: rootDir/openclaw.plugin.json 文件
+// lyc: 加载插件清单: rootDir/openclaw.plugin.json 文件
 export function loadPluginManifest(
   rootDir: string,
   rejectHardlinks = true,
   rootRealPath?: string,
 ): PluginManifestLoadResult {
-  // lyc: 解析插件元数据文件路径, rootDir 目录下的 openclaw.plugin.json 文件路径
+  // lyc: 解析插件清单文件路径, rootDir 目录下的 openclaw.plugin.json 文件路径
   const manifestPath = resolvePluginManifestPath(rootDir);
-  // lyc: 打开插件元数据文件
+  // lyc: 打开插件清单文件
   const opened = openBoundaryFileSync({
     absolutePath: manifestPath,
     rootPath: rootDir,
@@ -1276,16 +1278,24 @@ export function loadPluginManifest(
   const providerAuthEnvVars = normalizeStringListRecord(raw.providerAuthEnvVars);
   const providerAuthAliases = normalizeStringRecord(raw.providerAuthAliases);
   const channelEnvVars = normalizeStringListRecord(raw.channelEnvVars);
+  // lyc: 规范化 提供者认证选择(rootDir/openclaw.plugin.json.providerAuthChoices)
   const providerAuthChoices = normalizeProviderAuthChoices(raw.providerAuthChoices);
+  // lyc: 规范化 清单激活(rootDir/openclaw.plugin.json.activation)
   const activation = normalizeManifestActivation(raw.activation);
+  // lyc: 规范化 清单设置(rootDir/openclaw.plugin.json.setup)
   const setup = normalizeManifestSetup(raw.setup);
+  // lyc: 规范化 清单QA运行(rootDir/openclaw.plugin.json.qaRunners)
   const qaRunners = normalizeManifestQaRunners(raw.qaRunners);
   const skills = normalizeTrimmedStringList(raw.skills);
+  // lyc: 规范化 清单合同(rootDir/openclaw.plugin.json.contracts)
   const contracts = normalizeManifestContracts(raw.contracts);
+  // lyc: 规范化 媒体理解提供者元数据(rootDir/openclaw.plugin.json.mediaUnderstandingProviderMetadata)
   const mediaUnderstandingProviderMetadata = normalizeMediaUnderstandingProviderMetadata(
     raw.mediaUnderstandingProviderMetadata,
   );
+  // lyc: 规范化 清单配置合同(rootDir/openclaw.plugin.json.configContracts)
   const configContracts = normalizeManifestConfigContracts(raw.configContracts);
+  // lyc: 规范化 通道配置(rootDir/openclaw.plugin.json.channelConfigs)
   const channelConfigs = normalizeChannelConfigs(raw.channelConfigs);
 
   let uiHints: Record<string, PluginConfigUiHint> | undefined;
@@ -1445,6 +1455,7 @@ export type PackageManifest = {
   description?: string;
 } & Partial<Record<ManifestKey, OpenClawPackageManifest>>;
 
+// lyc: 从包清单文件中提取openclaw元数据(package.json.openclaw)
 export function getPackageManifestMetadata(
   manifest: PackageManifest | undefined,
 ): OpenClawPackageManifest | undefined {
@@ -1454,11 +1465,11 @@ export function getPackageManifestMetadata(
   return manifest[MANIFEST_KEY];
 }
 
-// lyc: 从插件清单文件中提取扩展目录列表(package.json.openclaw.extensions)
+// lyc: 从包清单文件中提取扩展目录列表(package.json.openclaw.extensions)
 export function resolvePackageExtensionEntries(
   manifest: PackageManifest | undefined,
 ): PackageExtensionResolution {
-  // lyc: 从插件清单文件中提取扩展目录列表(package.json.openclaw.extensions)
+  // lyc: 从包清单文件中提取扩展目录列表(package.json.openclaw.extensions)
   const raw = getPackageManifestMetadata(manifest)?.extensions;
   if (!Array.isArray(raw)) {
     return { status: "missing", entries: [] };

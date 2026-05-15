@@ -18,6 +18,7 @@ type RuntimeExtensionsResolution =
   | { ok: true; runtimeExtensions: string[] }
   | { ok: false; error: string };
 
+// lyc: 运行时扩展长度不匹配错误信息
 function runtimeExtensionsLengthMismatchMessage(params: {
   runtimeExtensionsLength: number;
   extensionsLength: number;
@@ -35,18 +36,23 @@ export function normalizePackageManifestStringList(value: unknown): string[] {
   return value.map((entry) => normalizeOptionalString(entry) ?? "").filter(Boolean);
 }
 
+// lyc: 解析包运行时扩展条目(package.json.openclaw.runtimeExtensions)
 export function resolvePackageRuntimeExtensionEntries(params: {
   manifest: PackageManifest | null | undefined;
   extensions: readonly string[];
 }): RuntimeExtensionsResolution {
+  // lyc: 从包清单文件中提取openclaw元数据(package.json.openclaw)
   const packageManifest = getPackageManifestMetadata(params.manifest ?? undefined);
+  // lyc: 提取运行时扩展列表(package.json.openclaw.runtimeExtensions)
   const runtimeExtensions = normalizePackageManifestStringList(packageManifest?.runtimeExtensions);
   if (runtimeExtensions.length === 0) {
     return { ok: true, runtimeExtensions: [] };
   }
+  // lyc: 配置中的运行时扩展列表长度(package.json.openclaw.runtimeExtensions)必须与扩展列表(package.json.openclaw.extensions)长度一致
   if (runtimeExtensions.length !== params.extensions.length) {
     return {
       ok: false,
+      // lyc: 运行时扩展长度不匹配错误信息
       error: runtimeExtensionsLengthMismatchMessage({
         runtimeExtensionsLength: runtimeExtensions.length,
         extensionsLength: params.extensions.length,
@@ -171,6 +177,7 @@ export async function validatePackageExtensionEntriesForInstall(params: {
   return { ok: true };
 }
 
+// lyc: 解析包入口源文件路径(packageDir/entryPath), 保证其在packageDir目录下, 并返回它的安全的路径
 function resolvePackageEntrySource(params: {
   packageDir: string;
   packageRootRealPath?: string;
@@ -182,7 +189,9 @@ function resolvePackageEntrySource(params: {
   const source = path.resolve(params.packageDir, params.entryPath);
   const rejectHardlinks = params.rejectHardlinks ?? true;
   const candidates = [source];
+  // lyc: 尝试打开absolutePath, 保证absolutePath在packageDir目录下, 并返回absolutePath的安全的路径
   const openCandidate = (absolutePath: string): string | null => {
+    // lyc: 尝试打开absolutePath, 保证absolutePath在packageDir目录下
     const opened = openBoundaryFileSync({
       absolutePath,
       rootPath: params.packageDir,
@@ -193,6 +202,7 @@ function resolvePackageEntrySource(params: {
       rejectHardlinks,
     });
     if (!opened.ok) {
+      // lyc: 根据失败原因, 添加诊断信息
       return matchBoundaryFileOpenFailure(opened, {
         path: () => null,
         io: () => {
@@ -217,7 +227,9 @@ function resolvePackageEntrySource(params: {
     fs.closeSync(opened.fd);
     return safeSource;
   };
+  // lyc: 如果不拒绝硬链接, 则向候选路径列表添加 构建候选路径
   if (!rejectHardlinks) {
+    // lyc: 将source的扩展名替换为.js, 作为构建候选路径
     const builtCandidate = source.replace(/\.[^.]+$/u, ".js");
     if (builtCandidate !== source) {
       candidates.push(builtCandidate);
@@ -228,26 +240,41 @@ function resolvePackageEntrySource(params: {
     if (!fs.existsSync(candidate)) {
       continue;
     }
+    // lyc: 尝试打开candidate, 保证candidate在packageDir目录下, 并返回candidate的安全的路径
     return openCandidate(candidate);
   }
-
+  // lyc: 如果所有候选路径都失败, 尝试打开source, 保证source在packageDir目录下, 并返回source的安全的路径
   return openCandidate(source);
 }
 
+// lyc: 推断是否应该构造运行时设置入口文件路径, origin=config或global则需要构造运行时设置入口文件路径
 function shouldInferBuiltRuntimeEntry(origin: PluginOrigin): boolean {
   return origin === "config" || origin === "global";
 }
 
+/* lyc: 解析安全的包入口文件路径(packageDir/entryPath): 解析包入口文件路径(packageDir/entryPath), 
+返回: null | { relativePath: packageDir到entryPath的相对路径; existingSource?: packageDir/entryPath的安全路径 }
+保证其在packageDir目录下, 不在packageDir目录内返回null
+如果存在, 则返回它的相对路径(相对于packageDir目录)和它的安全的路径
+如果不存在:
+  但从路径上判断是在packageDir目录下, 则返回它的相对路径(相对于packageDir目录)
+  否则, 则返回null
+*/
 function resolveSafePackageEntry(params: {
+  // lyc: 包清单文件(resolved/package.json)所在的目录
   packageDir: string;
+  // lyc: packageDir的绝对路径
   packageRootRealPath?: string;
+  // lyc: 设置入口, 相对包清单文件(resolved/package.json)所在目录的相对路径
   entryPath: string;
   sourceLabel: string;
   diagnostics: PluginDiagnostic[];
   rejectHardlinks?: boolean;
 }): { relativePath: string; existingSource?: string } | null {
+  // lyc: 设置入口绝对路径, 相对包清单文件(resolved/package.json)所在目录的绝对路径
   const absolutePath = path.resolve(params.packageDir, params.entryPath);
   if (fs.existsSync(absolutePath)) {
+    // lyc: 解析包入口源文件路径(packageDir/entryPath), 保证其在packageDir目录下, 并返回它的安全的路径
     const existingSource = resolvePackageEntrySource({
       packageDir: params.packageDir,
       ...(params.packageRootRealPath !== undefined
@@ -268,6 +295,7 @@ function resolveSafePackageEntry(params: {
   }
 
   try {
+    // lyc: 判断absolutePath是否在packageDir目录下, 不再会抛出异常
     resolveBoundaryPathSync({
       absolutePath,
       rootPath: params.packageDir,
@@ -279,6 +307,7 @@ function resolveSafePackageEntry(params: {
   } catch {
     params.diagnostics.push({
       level: "error",
+      // lyc: 扩展条目逃逸出包目录: ${params.entryPath}
       message: `extension entry escapes package directory: ${params.entryPath}`,
       source: params.sourceLabel,
     });
@@ -286,7 +315,7 @@ function resolveSafePackageEntry(params: {
   }
   return { relativePath: path.relative(params.packageDir, absolutePath).replace(/\\/g, "/") };
 }
-
+// lyc: 解析确实存在的包入口源文件路径(packageDir/entryPath), 保证其在packageDir目录下, 并返回它的安全的路径
 function resolveExistingPackageEntrySource(params: {
   packageDir: string;
   packageRootRealPath?: string;
@@ -302,17 +331,24 @@ function resolveExistingPackageEntrySource(params: {
   return resolvePackageEntrySource(params);
 }
 
+// lyc: 解析包清单中的运行时设置入口源文件路径: 即 packageDir/runtimeEntryPath | entryPath转dist开头 的安全运行时设置入口路径
 function resolvePackageRuntimeEntrySource(params: {
+  // lyc: 包清单文件(resolved/package.json)所在的目录
   packageDir: string;
+  // lyc: packageDir的绝对路径
   packageRootRealPath?: string;
+  // lyc: 设置入口文件相对路径, 相对包清单文件(resolved/package.json)所在目录的相对路径
   entryPath: string;
+  // lyc: 运行时设置入口文件相对路径, 相对包清单文件(resolved/package.json)所在目录的相对路径
   runtimeEntryPath?: string;
   origin: PluginOrigin;
   sourceLabel: string;
   diagnostics: PluginDiagnostic[];
   rejectHardlinks?: boolean;
 }): string | null {
-  const safeEntry = resolveSafePackageEntry({
+  // lyc: 解析安全的包入口文件路径(packageDir/entryPath): 
+  // safeEntry = null | { relativePath: packageDir到entryPath的相对路径; existingSource?: packageDir/entryPath的安全路径 }
+   const safeEntry = resolveSafePackageEntry({
     packageDir: params.packageDir,
     ...(params.packageRootRealPath !== undefined
       ? { packageRootRealPath: params.packageRootRealPath }
@@ -326,7 +362,9 @@ function resolvePackageRuntimeEntrySource(params: {
     return null;
   }
 
+  // lyc: 如果有运行时设置入口文件路径, 则解析运行时设置入口文件路径(packageDir/runtimeEntryPath), 符合要求则直接返回它的安全的路径
   if (params.runtimeEntryPath) {
+    // lyc: 解析运行时设置入口文件路径(packageDir/runtimeEntryPath), 保证其在packageDir目录下, 并返回它的安全的路径
     const runtimeSource = resolvePackageEntrySource({
       packageDir: params.packageDir,
       ...(params.packageRootRealPath !== undefined
@@ -342,7 +380,9 @@ function resolvePackageRuntimeEntrySource(params: {
     }
   }
 
+  // lyc: 推断是否应该构造运行时设置入口文件路径, origin=config或global则需要
   if (shouldInferBuiltRuntimeEntry(params.origin)) {
+    // lyc: 构造运行时设置入口文件路径列表, 排除relativePath本身, 并遍历它们(packageDir/candidate), 如果有符合要求的, 则返回它的安全的路径
     for (const candidate of listBuiltRuntimeEntryCandidates(safeEntry.relativePath)) {
       const runtimeSource = resolveExistingPackageEntrySource({
         packageDir: params.packageDir,
@@ -364,6 +404,7 @@ function resolvePackageRuntimeEntrySource(params: {
     return safeEntry.existingSource;
   }
 
+  // lyc: 如果所有候选路径都失败, 解析包入口源文件路径(packageDir/entryPath), 保证其在packageDir目录下, 并返回它的安全的路径
   return resolvePackageEntrySource({
     packageDir: params.packageDir,
     ...(params.packageRootRealPath !== undefined
@@ -376,20 +417,28 @@ function resolvePackageRuntimeEntrySource(params: {
   });
 }
 
+// lyc: 解析包清单文件中的设置入口文件路径: 即 packageDir/manifest.openclaw.runtimeSetupEntry | manifest.openclaw.setupEntryPath转dist开头 的安全运行时设置入口路径
 export function resolvePackageSetupSource(params: {
+  // lyc: 包清单文件(resolved/package.json)所在的目录
   packageDir: string;
+  // lyc: packageDir的绝对路径
   packageRootRealPath?: string;
+  // lyc: 包清单文件(resolved/package.json)实例
   manifest: PackageManifest | null;
   origin: PluginOrigin;
   sourceLabel: string;
   diagnostics: PluginDiagnostic[];
   rejectHardlinks?: boolean;
 }): string | null {
+  // lyc: 从包清单文件中提取包元数据(package.json.openclaw)
   const packageManifest = getPackageManifestMetadata(params.manifest ?? undefined);
+  // lyc: 从包元数据中提取setupEntry设置入口文件路径(package.json.openclaw.setupEntry), 
+  // lyc: 一个相对包清单文件(resolved/package.json)所在目录的相对路径,即相对于packageDir的相对路径
   const setupEntryPath = normalizeOptionalString(packageManifest?.setupEntry);
   if (!setupEntryPath) {
     return null;
   }
+  // lyc: 解析包清单中的运行时设置入口源文件路径: 即 packageDir/runtimeSetupEntry | setupEntryPath转dist开头 的安全运行时设置入口路径
   return resolvePackageRuntimeEntrySource({
     packageDir: params.packageDir,
     ...(params.packageRootRealPath !== undefined
@@ -404,6 +453,7 @@ export function resolvePackageSetupSource(params: {
   });
 }
 
+// lyc: 解析包运行时扩展入口文件路径列表(packageDir/runtimeResolution.runtimeExtensions[]), 保证其在packageDir目录下, 并返回它的安全的路径
 export function resolvePackageRuntimeExtensionSources(params: {
   packageDir: string;
   packageRootRealPath?: string;
@@ -414,6 +464,7 @@ export function resolvePackageRuntimeExtensionSources(params: {
   diagnostics: PluginDiagnostic[];
   rejectHardlinks?: boolean;
 }): string[] {
+  // lyc: 解析包运行时扩展条目(package.json.openclaw.runtimeExtensions)
   const runtimeResolution = resolvePackageRuntimeExtensionEntries({
     manifest: params.manifest,
     extensions: params.extensions,
@@ -428,12 +479,14 @@ export function resolvePackageRuntimeExtensionSources(params: {
   }
 
   return params.extensions.flatMap((entryPath, index) => {
+    // lyc: 解析运行时扩展入口文件路径(packageDir/runtimeResolution.runtimeExtensions[index])
     const source = resolvePackageRuntimeEntrySource({
       packageDir: params.packageDir,
       ...(params.packageRootRealPath !== undefined
         ? { packageRootRealPath: params.packageRootRealPath }
         : {}),
       entryPath,
+      // lyc: 注意: 配置中的runtimeResolution运行时扩展列表长度(package.json.openclaw.runtimeExtensions)必须与params.extensions扩展列表(package.json.openclaw.extensions)数组索引|位置一致
       runtimeEntryPath: runtimeResolution.runtimeExtensions[index],
       origin: params.origin,
       sourceLabel: params.sourceLabel,

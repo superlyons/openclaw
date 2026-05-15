@@ -130,7 +130,8 @@ function resolveBundledDirFromPackageRoot(
 }
 
 /* lyc: 解析 捆绑|内置 插件所在目录 
-packageRoot: 以OPENCLAW_BUNDLED_PLUGINS_DIR|argv1|process.cwd|import.meta.url|node.exe所在目录 为基点查找 根package.json 所在的目录
+packageRoot: 插件的包清单文件(package.json)所在目录
+  以OPENCLAW_BUNDLED_PLUGINS_DIR|argv1|process.cwd|import.meta.url|node.exe所在目录 为基点查找 根package.json(插件的包清单文件) 所在的目录
   packageRoot=根package.json, 它必须满足有name字段, 且name字段的值在 CORE_PACKAGE_NAMES 中即值为openclaw
 可能返回的值:
   /tmp/openclaw-empty-bundled-plugins 如果 env.OPENCLAW_DISABLE_BUNDLED_PLUGINS=true 返回该路径

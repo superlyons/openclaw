@@ -127,6 +127,7 @@ function buildSharedDiscoveryCacheKey(params: {
   return `shared::${ownershipUid ?? "none"}::${configExtensionsRoot}::${bundledRoot}`;
 }
 
+// lyc: 获取当前进程的用户ID, 优先从overrideUid中获取, 否则如果是linux系统再从process.getuid()获取
 function currentUid(overrideUid?: number | null): number | null {
   if (overrideUid !== undefined) {
     return overrideUid;
@@ -158,6 +159,7 @@ type CandidateBlockIssue = {
   expectedUid?: number;
 };
 
+// lyc: 检查source是否逃逸了rootDir目录
 function checkSourceEscapesRoot(params: {
   source: string;
   rootDir: string;
@@ -181,6 +183,7 @@ function checkSourceEscapesRoot(params: {
   };
 }
 
+// lyc: 检查source和rootDir是否存在 并 具有正确的权限, 即source和rootDir: 必须存在, 不是全局可写(其它用户没有写权限), 所有者uid必须为params.uid(params.origin !== "bundled"并且提供了params.uid)
 function checkPathStatAndPermissions(params: {
   source: string;
   rootDir: string;
@@ -207,12 +210,29 @@ function checkPathStatAndPermissions(params: {
         targetPath,
       };
     }
+    /* lyc:
+      0o代表八进制数, 0o777=111 111 111, 0o666=110 110 110, 0o755=111 101 101, 0o744=111 100 100
+      检查指定路径targetPath（文件或目录）是否对“其他用户”（Other users，即非所有者且非同组用户）开放了“写权限”。
+      stat.mode 是一个整数，不仅包含权限（如 rwx），还包含文件类型（如目录、文件、链接）和特殊位（如 setuid, sticky bit）
+      stat.mode & 0o777 可以提取出权限部分: 去掉文件类型和特殊位，只保留标准的 9 位权限（所有者、组、其他 的 读/写/执行）
+        例如: stat.mode = 0o721: 111 010 001 & 111 111 111 = 111 010 001 = 0o721 = modeBits
+      0o002表示其他用户有写权限, 
+        721: 111 010 001 & 000 000 010 = 000 000 000 = 0 === 0
+        732: 111 011 010 & 000 000 010 = 000 000 010 = 2 !== 0
+    */
+    // lyc: 目标目录或文件的仅权限部分
     let modeBits = stat.mode & 0o777;
+    // lyc: 检查目录或文件是否对其它用户开放了写权限, !== 0 代表开放了写权限 && params.origin === "bundled"
     if ((modeBits & 0o002) !== 0 && params.origin === "bundled") {
       // npm/global installs can create package-managed extension dirs without
       // directory entries in the tarball, which may widen them to 0777.
       // Tighten bundled dirs in place before applying the normal safety gate.
+      // lyc: npm的全局安装可以在压缩包中没有目录条目的情况下创建由包管理的扩展目录，这可能会将这些目录的权限放宽至0777
+      // lyc: 为了确保插件的正常运行，我们需要将这些目录的权限限制为0755
       try {
+        // lyc: 八进制~0o022=~(000 010 010代表组用户和其他用户有写权限)=111 101 101代表组用户和其他用户没有写权限=0o755 ~是取反操作
+        // lyc: modeBits = 0o777 & ~0o022 = 111 111 111 & 111 101 101 = 111 101 101 = 0o755
+        // lyc: 限制目录或文件的权限为0755, 限制组用户和其他用户的写权限
         fs.chmodSync(targetPath, modeBits & ~0o022);
         const repairedStat = safeStatSync(targetPath);
         if (!repairedStat) {
@@ -229,6 +249,8 @@ function checkPathStatAndPermissions(params: {
         // Fall through to the normal block path below when repair is not possible.
       }
     }
+    // lyc: 检查目录或文件是否对其它用户开放了写权限, !== 0 代表开放了写权限则返回path_world_writable错误信息
+    // lyc: path_world_writable(路径全局可写)错误
     if ((modeBits & 0o002) !== 0) {
       return {
         reason: "path_world_writable",
@@ -238,6 +260,7 @@ function checkPathStatAndPermissions(params: {
         modeBits,
       };
     }
+    // lyc: 如果目录或文件的UID者不是params.uid, 则返回path_suspicious_ownership(路径所有权可疑)错误信息
     if (
       params.origin !== "bundled" &&
       params.uid !== null &&
@@ -258,6 +281,7 @@ function checkPathStatAndPermissions(params: {
   return null;
 }
 
+// lyc: 确保插件正确,即sources是否逃逸rootDir, 是否存在正确的权限
 function findCandidateBlockIssue(params: {
   source: string;
   rootDir: string;
@@ -265,6 +289,7 @@ function findCandidateBlockIssue(params: {
   ownershipUid?: number | null;
   realpathCache: Map<string, string>;
 }): CandidateBlockIssue | null {
+  // lyc: 检查source是否逃逸了rootDir目录
   const escaped = checkSourceEscapesRoot({
     source: params.source,
     rootDir: params.rootDir,
@@ -273,6 +298,7 @@ function findCandidateBlockIssue(params: {
   if (escaped) {
     return escaped;
   }
+  // lyc: 检查source和rootDir是否存在并具有正确的权限
   return checkPathStatAndPermissions({
     source: params.source,
     rootDir: params.rootDir,
@@ -294,6 +320,7 @@ function formatCandidateBlockMessage(issue: CandidateBlockIssue): string {
   return `blocked plugin candidate: suspicious ownership (${issue.targetPath}, uid=${issue.foundUid}, expected uid=${issue.expectedUid} or root)`;
 }
 
+// lyc: 是否是不安全的候选插件, 返回true代表插件是不安全的
 function isUnsafePluginCandidate(params: {
   source: string;
   rootDir: string;
@@ -302,6 +329,7 @@ function isUnsafePluginCandidate(params: {
   ownershipUid?: number | null;
   realpathCache: Map<string, string>;
 }): boolean {
+  // lyc: 确保插件正确
   const issue = findCandidateBlockIssue({
     source: params.source,
     rootDir: params.rootDir,
@@ -309,9 +337,11 @@ function isUnsafePluginCandidate(params: {
     ownershipUid: params.ownershipUid,
     realpathCache: params.realpathCache,
   });
+  // lyc: 插件正确, 即不是不安全的插件, 返回falase
   if (!issue) {
     return false;
   }
+  // lyc: 插件不正确push诊断信息到diagnostics
   params.diagnostics.push({
     level: "warn",
     source: issue.targetPath,
@@ -320,6 +350,8 @@ function isUnsafePluginCandidate(params: {
   return true;
 }
 
+// lyc: 判断filePath是否是扩展文件, 以 EXTENSION_EXTS 中的扩展名结尾, 且不是 .d.ts
+// lyc: ".ts", ".js", ".mts", ".cts", ".mjs", ".cjs"
 function isExtensionFile(filePath: string): boolean {
   const ext = path.extname(filePath);
   if (!EXTENSION_EXTS.has(ext)) {
@@ -441,7 +473,7 @@ function getCachedDiscoveryResult(params: {
   return result;
 }
 
-// lyc: 读取插件清单文件(dir/package.json), 并解析为 PackageManifest 类型
+// lyc: 读取包清单文件(dir/package.json), 并解析为 PackageManifest 类型
 function readPackageManifest(
   dir: string,
   rejectHardlinks = true,
@@ -468,6 +500,8 @@ function readPackageManifest(
   }
 }
 
+// lyc: 如果没有提供packageName则返回base(不含扩展名的文件名), 如果存在多个扩展则返回unscoped/base, 否则返回unscoped, unscoped是packageName的最后一个部分
+// lyc: Exp: 可能返回: index, feishu/index, feishu
 function deriveIdHint(params: {
   filePath: string;
   manifestId?: string;
@@ -500,7 +534,7 @@ function deriveIdHint(params: {
   return `${normalizedPackageId}/${base}`;
 }
 
-// lyc: 从插件清单文件(rootDir/openclaw.plugin.json)中解析插件ID
+// lyc: 从插件清单文件中解析ID(rootDir/openclaw.plugin.json.id)
 function resolveIdHintManifestId(
   rootDir: string,
   rejectHardlinks: boolean,
@@ -509,7 +543,7 @@ function resolveIdHintManifestId(
   const manifest = loadPluginManifest(rootDir, rejectHardlinks, rootRealPath);
   return manifest.ok ? manifest.manifest.id : undefined;
 }
-
+// lyc: 将插件添加到candidates候选名单中
 function addCandidate(params: {
   candidates: PluginCandidate[];
   diagnostics: PluginDiagnostic[];
@@ -523,6 +557,7 @@ function addCandidate(params: {
   bundleFormat?: PluginBundleFormat;
   ownershipUid?: number | null;
   workspaceDir?: string;
+  // lyc: 插件的包清单文件(packageRoot/package.json)
   manifest?: PackageManifest | null;
   packageDir?: string;
   bundledManifest?: PluginManifest;
@@ -530,12 +565,14 @@ function addCandidate(params: {
   realpathCache: Map<string, string>;
 }) {
   const resolved = path.resolve(params.source);
+  // lyc: 如果seen中已经存在resolved(params.source) 则直接返回
   if (params.seen.has(resolved)) {
     return;
   }
   const resolvedRoot =
     safeRealpathSync(params.rootDir, params.realpathCache) ?? path.resolve(params.rootDir);
   if (
+    // 如果插件是不安全的(true), 则直接返回
     isUnsafePluginCandidate({
       source: resolved,
       rootDir: resolvedRoot,
@@ -547,8 +584,11 @@ function addCandidate(params: {
   ) {
     return;
   }
+  // lyc: 到此代表插件是安全的
+  // lyc: 将resolved(params.source) 添加到seen中防止重复处理
   params.seen.add(resolved);
   const manifest = params.manifest ?? null;
+  // lyc: 将插件添加到candidates候选名单中
   params.candidates.push({
     idHint: params.idHint,
     source: resolved,
@@ -562,12 +602,14 @@ function addCandidate(params: {
     packageVersion: normalizeOptionalString(manifest?.version),
     packageDescription: normalizeOptionalString(manifest?.description),
     packageDir: params.packageDir,
+    // lyc: 只返回清单原数据: manifest.openclaw部分 packageManifest
     packageManifest: getPackageManifestMetadata(manifest ?? undefined),
     bundledManifest: params.bundledManifest,
     bundledManifestPath: params.bundledManifestPath,
   });
 }
 
+// lyc: 在根目录rootDir中发现codex|cursor|claude的捆绑包,未发现返回"none", 发现并成功加入candidates候选名单时返回"added", 失败返回"invalid"
 function discoverBundleInRoot(params: {
   rootDir: string;
   origin: PluginOrigin;
@@ -578,11 +620,15 @@ function discoverBundleInRoot(params: {
   seen: Set<string>;
   realpathCache: Map<string, string>;
 }): "added" | "invalid" | "none" {
+  // lyc: 检测插件包的格式并返回格式名(codex|cursor|claude|null)
   const bundleFormat = detectBundleManifestFormat(params.rootDir);
   if (!bundleFormat) {
     return "none";
   }
+  // lyc: rootDir的真实绝对路径
   const rootRealPath = safeRealpathSync(params.rootDir, params.realpathCache) ?? undefined;
+
+  // lyc: 加载绑定插件的清单manifest文件, 特指codex, cursor, claude的绑定插件清单
   const bundleManifest = loadBundleManifest({
     rootDir: params.rootDir,
     ...(rootRealPath !== undefined ? { rootRealPath } : {}),
@@ -597,6 +643,7 @@ function discoverBundleInRoot(params: {
     });
     return "invalid";
   }
+  // lyc: 将绑定插件添加到candidates候选名单中
   addCandidate({
     candidates: params.candidates,
     diagnostics: params.diagnostics,
@@ -606,6 +653,7 @@ function discoverBundleInRoot(params: {
     rootDir: params.rootDir,
     origin: params.origin,
     format: "bundle",
+    // lyc: codex|cursor|claude
     bundleFormat,
     ownershipUid: params.ownershipUid,
     workspaceDir: params.workspaceDir,
@@ -614,6 +662,8 @@ function discoverBundleInRoot(params: {
   return "added";
 }
 
+// lyc: 在目录dir中发现插件, 并将其添加到candidates候选名单中
+// lyc: 除了目录处理相关逻辑外(遍历,递归等), 核心功能和 discoverFromPath 相同
 function discoverInDirectory(params: {
   dir: string;
   origin: PluginOrigin;
@@ -778,7 +828,25 @@ function discoverInDirectory(params: {
   }
 }
 
-// lyc: 在指定的路径(rawPath)中发现插件
+/* lyc: 在指定的路径(rawPath)中发现插件
+插件的包清单文件 | 插件包清单文件 (resolved/package.json)
+插件清单文件(resolved/openclaw.plugin.json, 或 (codex|cursor|claude)-plugin/plugin.json)
+rawPath = resolved = resolvedRealPath
+如果rawPath是文件, 则直接添加到params.candidates候选名单中, idHint为去掉扩展名的文件名, origin=params.origin, format="openclaw", bundleFormat=undefined, 退出函数
+如果rawPath是目录:
+  manifestId: 从插件清单文件中解析ID(resolved/openclaw.plugin.json.id)
+  manifest: 插件的包清单文件(resolved/package.json), 它一定在packageRoot目录下因为packageRoot是包清单文件所在目录
+  如果设置了 扩展目录列表(resolved/package.json.openclaw.extensions), 将扩展添加到params.candidates候选名单中, 退出函数, 具体如下:
+    根据 扩展目录列表 解析 运行时扩展入口文件路径列表(packageDir/package.json.openclaw.runtimeExtensions[]), 保证其在packageDir目录下, 并返回它的安全的路径
+      将每个 运行时扩展入口文件路径 添加到params.candidates候选名单中, idHint=manifestId/当前运行时扩展入口文件去扩展名的文件名 origin=params.origin, format="openclaw", bundleFormat=undefined
+    退出函数
+  在根目录resolved中发现codex|cursor|claude的捆绑包, 如果发现, 则添加到params.candidates候选名单中, 退出函数
+    idHint=codex|cursor|claude配置文件中的name属性, origin=params.origin, format="bundle", bundleFormat="codex|cursor|claude"
+  没有发现codex|cursor|claude的捆绑包, 则在resolved目录下查找默认的插件入口文件index.ts|js|mjs|cjs
+    找到入口文件, 则添加到params.candidates候选名单中, idHint=去掉扩展名的文件名, origin=params.origin, format="openclaw", bundleFormat=undefined, 退出函数
+  如果在resolved目录下没有发现codex|cursor|claude的捆绑包, 也没有默认的插件入口文件, 则递归发现resolved目录下的插件, 并将其添加到candidates候选名单中
+  退出函数
+*/
 function discoverFromPath(params: {
   rawPath: string;
   origin: PluginOrigin;
@@ -801,6 +869,7 @@ function discoverFromPath(params: {
   }
 
   const stat = fs.statSync(resolved);
+  // lyc: 如果resolved是文件, 则直接添加到candidates候选名单中, 退出函数
   if (stat.isFile()) {
     if (!isExtensionFile(resolved)) {
       params.diagnostics.push({
@@ -827,17 +896,20 @@ function discoverFromPath(params: {
 
   if (stat.isDirectory()) {
     const rejectHardlinks = params.origin !== "bundled";
-    // lyc: resolved 的真实路径, 并缓存到 realpathCache 中, resolved使用path.resolve(), 这里使用fs.realpathSync() 它们存在本质的区别
+    // lyc: 返回 resolved 的真实路径, 并缓存到 realpathCache 中, resolved使用path.resolve(), 这里使用fs.realpathSync() 它们存在本质的区别
     // lyc: path.resolve() 不实际操作文件系统只是在路径字符上进行解析，不会验证路径是否存在, 不会解析符号链接, 返回解析后的绝对路径
     // lyc: fs.realpathSync() 实际会操作文件系统检查路径是否真实存在, 会解析软连接或快捷方式, 返回解析后的绝对路径
     const resolvedRealPath = safeRealpathSync(resolved, params.realpathCache) ?? undefined;
-    // lyc: 读取插件清单文件(resolved/package.json), 并解析为 PackageManifest 类型
+    // lyc: 读取插件的包清单文件(resolved/package.json), 并解析为 PackageManifest 类型
+    // lyc: 插件的包清单文件一定在packageRoot目录下, 因为packageRoot是插件的包清单文件所在目录
     const manifest = readPackageManifest(resolved, rejectHardlinks, resolvedRealPath);
-    // lyc: 从插件清单文件中提取扩展目录列表(resolved/package.json.openclaw.extensions)并返回{status: "ok", entries: [extensions列表]}
+    // lyc: 从包清单文件中提取扩展目录列表(resolved/package.json.openclaw.extensions)并返回{status: "ok", entries: [extensions列表]}
     const extensionResolution = resolvePackageExtensionEntries(manifest ?? undefined);
     // lyc: 代表扩展目录列表(resolved/package.json.openclaw.extensions)
     const extensions = extensionResolution.status === "ok" ? extensionResolution.entries : [];
+    // lyc: 从插件清单文件中解析ID(resolved/openclaw.plugin.json.id)
     const manifestId = resolveIdHintManifestId(resolved, rejectHardlinks, resolvedRealPath);
+    // lyc: 解析包清单文件中的设置入口文件路径: 即 packageDir/manifest.openclaw.runtimeSetupEntry | manifest.openclaw.setupEntryPath转dist开头 的安全运行时设置入口路径
     const setupSource = resolvePackageSetupSource({
       packageDir: resolved,
       ...(resolvedRealPath !== undefined ? { packageRootRealPath: resolvedRealPath } : {}),
@@ -848,7 +920,10 @@ function discoverFromPath(params: {
       rejectHardlinks,
     });
 
+    // lyc: 如果扩展目录列表resolved/package.json.openclaw.extensions不为空, 
+    // lyc: 则解析运行时扩展入口文件路径列表resolved/package.json.openclaw.runtimeExtensions[], 并将其添加到candidates候选名单中, 退出函数
     if (extensions.length > 0) {
+      // lyc: 解析包运行时扩展入口文件路径列表(packageDir/package.json.openclaw.runtimeExtensions[]), 保证其在packageDir目录下, 并返回它的安全的路径
       const resolvedRuntimeSources = resolvePackageRuntimeExtensionSources({
         packageDir: resolved,
         ...(resolvedRealPath !== undefined ? { packageRootRealPath: resolvedRealPath } : {}),
@@ -884,6 +959,7 @@ function discoverFromPath(params: {
       return;
     }
 
+    // lyc: 在根目录rootDir中发现codex|cursor|claude的捆绑包,未发现返回"none", 发现并成功加入candidates候选名单时返回"added", 失败返回"invalid"
     const bundleDiscovery = discoverBundleInRoot({
       rootDir: resolved,
       origin: params.origin,
@@ -898,10 +974,12 @@ function discoverFromPath(params: {
       return;
     }
 
+    // lyc: 如果在resolved目录下没有发现codex|cursor|claude的捆绑包, 则在resolved目录下查找默认的插件入口文件index.ts|js|mjs|cjs
     const indexFile = [...DEFAULT_PLUGIN_ENTRY_CANDIDATES]
       .map((candidate) => path.join(resolved, candidate))
       .find((candidate) => fs.existsSync(candidate));
 
+    // lyc: 如果存在默认的插件入口文件, 则将其添加到candidates候选名单中, 退出函数
     if (indexFile && isExtensionFile(indexFile)) {
       addCandidate({
         candidates: params.candidates,
@@ -921,6 +999,7 @@ function discoverFromPath(params: {
       return;
     }
 
+    // lyc: 如果在resolved目录下没有发现codex|cursor|claude的捆绑包, 也没有默认的插件入口文件, 则递归发现resolved目录下的插件, 并将其添加到candidates候选名单中
     discoverInDirectory({
       dir: resolved,
       origin: params.origin,
@@ -935,7 +1014,25 @@ function discoverFromPath(params: {
   }
 }
 
-// lyc: 发现OpenClaw插件
+/* lyc: 发现OpenClaw插件, 发现位置
+openclaw.json.plugins.load.paths[], 
+workspace/.openclaw/extensions, 
+packageRoot/extensions, 
+packageRoot/.../extensions, 
+openclaw.json的配置目录/extensions中发现插件
+
+roots.stock: 捆绑|内置 插件所在目录 | OpenClaw插件的捆绑根目录, 一般在 packageRoot/dist-runtime | dist | ""/extensions
+从params.extraPaths(openclaw.json.plugins.load.paths[])中发现插件, 路径不在 roots.stock(OpenClaw插件的捆绑加载路径) 下
+  origin="config", format="openclaw|bundle", bundleFormat=undefined | "codex|cursor|claude"
+从params.workspaceDir/.openclaw/extensions中发现插件
+  origin="workspace", format="openclaw|bundle", bundleFormat=undefined | "codex|cursor|claude"
+从覆盖目录(packageRoot/extensions)中发现插件
+  origin="bundled", format="openclaw|bundle", bundleFormat=undefined | "codex|cursor|claude"
+从roots.stock(packageRoot/.../extensions)中发现插件
+  origin="bundled", format="openclaw|bundle", bundleFormat=undefined | "codex|cursor|claude"
+从roots.global(openclaw.json的配置目录/extensions)中发现插件
+  origin="global", format="openclaw|bundle", bundleFormat=undefined | "codex|cursor|claude"
+*/
 export function discoverOpenClawPlugins(params: {
   workspaceDir?: string;
   // lyc: 一般为openclaw.json.plugins.load.paths中的路径
@@ -951,6 +1048,8 @@ export function discoverOpenClawPlugins(params: {
   const workspaceRoot = workspaceDir ? resolveUserPath(workspaceDir, env) : undefined;
   // lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
   const roots = resolvePluginSourceRoots({ workspaceDir: workspaceRoot, env });
+  // lyc: 从缓存中获取作用域发现结果, 如果缓存中没有, 则从入参load()加载并缓存结果并返回
+  // lyc: 即: 从params.extraPaths(不在 roots.stock(OpenClaw插件的捆绑加载路径) 中的路径)和params.workspaceDir/.openclaw/extensions中发现插件
   const scopedResult = getCachedDiscoveryResult({
     cacheEnabled,
     // lyc: 构建作用域发现缓存键
@@ -962,6 +1061,7 @@ export function discoverOpenClawPlugins(params: {
     }),
     env,
     load: () => {
+      // lyc: 创建返回结果包含{candidates候选目录: [], diagnostics诊断问题: []}
       const result = createDiscoveryResult();
       const seen = new Set<string>();
       const realpathCache = new Map<string, string>();
@@ -990,7 +1090,7 @@ export function discoverOpenClawPlugins(params: {
           });
           continue;
         }
-        // lyc: 在指定的路径(rawPath)中发现插件
+        // lyc: 在指定的路径(loadPath = rawPath)中发现插件
         discoverFromPath({
           rawPath: trimmed,
           origin: "config",
@@ -1003,13 +1103,14 @@ export function discoverOpenClawPlugins(params: {
           realpathCache,
         });
       }
-      // lyc: workspaceRoot(入参workspaceDir) 是否是 OpenClaw插件的捆绑根目录(roots.stock)
+      // lyc: workspaceRoot(入参workspaceDir) == OpenClaw插件的捆绑根目录(roots.stock)
       const workspaceMatchesBundledRoot = resolvesToSameDirectory(
         workspaceRoot,
         roots.stock,
         realpathCache,
       );
       // lyc: 如果workspaceRoot不是OpenClaw插件的捆绑根目录(roots.stock) 且 workspaceRoot(入参workspaceDir) 和 roots.workspace(工作空间目录/.openclaw/extensions) 有值
+      // lyc: 即: params.workspaceDir/.openclaw/extensions不是OpenClaw插件的捆绑加载路径, 则在params.workspaceDir/.openclaw/extensions目录下发现插件, 并将其添加到candidates候选名单中
       if (roots.workspace && workspaceRoot && !workspaceMatchesBundledRoot) {
         // Keep workspace auto-discovery constrained to the OpenClaw extensions root.
         // Recursively scanning the full workspace treats arbitrary project folders as
@@ -1030,6 +1131,8 @@ export function discoverOpenClawPlugins(params: {
       return result;
     },
   });
+  // lyc: 从缓存中获取共享发现结果, 如果缓存中没有, 则从入参load()加载并缓存结果并返回
+  // lyc: 即: 从覆盖目录(packageRoot/extensions), roots.stock(packageRoot/.../extensions) 和 roots.global(openclaw的配置目录/extensions)中发现插件
   const sharedResult = getCachedDiscoveryResult({
     cacheEnabled,
     cacheKey: buildSharedDiscoveryCacheKey({
@@ -1041,10 +1144,12 @@ export function discoverOpenClawPlugins(params: {
       const result = createDiscoveryResult();
       const seen = new Set<string>();
       const realpathCache = new Map<string, string>();
+      // lyc: 列出所有在挂载点上的覆盖插件目录(packageRoot/extensions/**), 覆盖插件目录基于 bundledRoot(捆绑|内置 插件所在目录) 生成即去掉dist-runtime|dist目录后的路径
       for (const sourceOverlayDir of listBundledSourceOverlayDirs({
         bundledRoot: roots.stock,
         env,
       })) {
+        // lyc: 在挂载点上的覆盖插件目录中发现插件, 来代替openclaw原本的 捆绑|内置插件
         discoverFromPath({
           rawPath: sourceOverlayDir,
           origin: "bundled",
@@ -1056,13 +1161,17 @@ export function discoverOpenClawPlugins(params: {
           seen,
           realpathCache,
         });
+        // lyc: 因为是在挂载点上的覆盖插件目录, 所以需要警告用户插件ID相同, 但是插件路径不同
         result.diagnostics.push({
           level: "warn",
           source: sourceOverlayDir,
+          // lyc: 正在使用绑定挂载的内置插件源码覆盖层；该源码将覆盖同一插件 ID 对应的已打包 dist 产物
           message:
             "using bind-mounted bundled plugin source overlay; this source overrides the packaged dist bundle for the same plugin id",
         });
       }
+      // lyc: 如果有 捆绑|内置 插件所在目录(roots.stock), 则递归发现捆绑插件目录下的插件, 并将其添加到candidates候选名单中
+      // lyc: 注意之前先运行了 覆盖插件目录 因此这里加入的 捆绑|内置 插件 id可能重复, 即同一个插件id可能有两个候选插件
       if (roots.stock) {
         discoverInDirectory({
           dir: roots.stock,
@@ -1076,6 +1185,7 @@ export function discoverOpenClawPlugins(params: {
       }
       // Keep auto-discovered global extensions behind bundled plugins.
       // Users can still intentionally override via plugins.load.paths (origin=config).
+      // lyc: 如果有 openclaw的配置目录/extensions(roots.global), 则递归发现openclaw的配置目录/extensions目录下的插件, 并将其添加到candidates候选名单中
       discoverInDirectory({
         dir: roots.global,
         origin: "global",

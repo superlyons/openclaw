@@ -64,6 +64,7 @@ export function buildLegacyBundledPath(localPath: string): string | null {
   return bundledLeaf ? path.join(packaged.packageRoot, "extensions", bundledLeaf) : null;
 }
 
+// lyc: 构建遗留的插件捆绑根目录(packageRoot/extensions)
 export function buildLegacyBundledRootPath(localPath: string): string | null {
   const packaged = findPackagedBundledRoot(localPath);
   return packaged ? path.join(packaged.packageRoot, "extensions") : null;
@@ -96,6 +97,7 @@ export function resolvePackagedBundledLoadPathAlias(params: {
     return null;
   }
   // lyc: 查找OpenClaw插件的packageRoot(插件打包根目录)和bundledRoot(插件捆绑根目录), 不符合要求的路径返回null
+  // lyc: packaged = { packageRoot: "packageRoot", bundledRoot: "bundledRoot" }
   const packaged = findPackagedBundledRoot(params.bundledRoot);
   if (!packaged) {
     return null;

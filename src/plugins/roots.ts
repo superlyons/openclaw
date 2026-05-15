@@ -14,9 +14,9 @@ export type PluginCacheInputs = {
 };
 
 /* lyc: 解析插件源根目录 { stock: packageRoot/.../extensions, global: openclaw的配置目录/extensions, workspace: workspaceRoot/.openclaw/extensions }
-stock: 捆绑|内置 插件所在目录 | OpenClaw插件的捆绑根目录, 一般在 packageRoot/dist-runtime|dist|""/extensions
-global: OpenClaw全局插件目录， 一般在 openclaw的配置目录/extensions
-workspace: OpenClaw工作空间插件目录， 一般在 工作空间目录/.openclaw/extensions
+stock: 捆绑|内置 插件所在目录 | OpenClaw插件的捆绑根目录, 一般在 packageRoot/dist-runtime | dist | ""/extensions
+global: OpenClaw全局插件目录， 一般在 openclaw.json的配置所在目录/extensions
+workspace: OpenClaw工作空间插件目录， 一般在 工作空间根目录/.openclaw/extensions
 */
 export function resolvePluginSourceRoots(params: {
   workspaceDir?: string;
