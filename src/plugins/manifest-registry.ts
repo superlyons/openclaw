@@ -833,8 +833,9 @@ export function loadPluginManifestRegistry(
 
     const existing = seenIds.get(manifest.id);
     /* lyc: 如果之前处理过相同的 插件清单文件实例id
-    它们路径相同 且 当前候选插件的来源(origin)优先级 高于 已存在插件的来源(origin),
+    id相同,它们路径相同 且 当前候选插件的来源(origin)优先级 高于 已存在插件的来源(origin),
       则使用候选插件的记录来覆盖records和seenIds中已存在的记录 并 继续下一个候选插件的处理
+    id相同,它们路径不同, 则判断是否使用候选插件的记录来覆盖records和seenIds中已存在的记录 并 继续下一个候选插件的处理
     */ 
     if (existing) {
       // Check whether both candidates point to the same physical directory
@@ -932,7 +933,7 @@ export function loadPluginManifestRegistry(
     pushManifestCompatibilityDiagnostics({ record, diagnostics });
   }
 
-  // lyc: 
+  // lyc: 返回插件清单注册表(registry) 包含 所有插件的记录(records) 和 诊断记录(diagnostics)
   const registry = { plugins: records, diagnostics };
   if (cacheEnabled) {
     const ttl = resolveManifestCacheMs(env);
