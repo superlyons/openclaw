@@ -309,7 +309,7 @@ function mergeGeneratedChannelConfigs(manifest, generatedChannelConfigs) {
  *   env?: NodeJS.ProcessEnv;
  * }} [params]
  */
-/** lyc:ai
+/** lyc
  * 复制捆绑插件的元数据到分发目录
  * 
  * 此函数处理 extensions/ 目录下的所有插件，将它们的元数据文件

@@ -246,7 +246,7 @@ function linkPluginNodeModules(params) {
   );
 }
 
-/** lyc:ai
+/** lyc
  * 分阶段处理捆绑插件的运行时文件结构
  * 
  * 此函数创建 dist-runtime/ 目录，作为插件在运行时的实际工作目录。

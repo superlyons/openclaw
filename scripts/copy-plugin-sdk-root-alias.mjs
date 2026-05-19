@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { writeTextFileIfChanged } from "./runtime-postbuild-shared.mjs";
 
-/** lyc:ai
+/** lyc
  * 复制插件SDK根别名文件到分发目录
  * 
  * 此函数将源代码中的插件SDK根别名文件(src/plugin-sdk/root-alias.cjs)

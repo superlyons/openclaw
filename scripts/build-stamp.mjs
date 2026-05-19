@@ -30,7 +30,7 @@ export function resolveGitHead(params = {}) {
   }
 }
 
-/** lyc:ai
+/** lyc
  * 写入构建戳文件(.buildstamp是文件): /home/openclaw/dist/.buildstamp
  * 
  * 此函数将当前构建的时间戳和 Git 提交哈希写入到 dist/.buildstamp 文件中。

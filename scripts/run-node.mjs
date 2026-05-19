@@ -672,12 +672,7 @@ const getInterruptedSpawnExitCode = (res) => {
   return null;
 };
 
-/** lyc:ai
- * 运行OpenClaw
- * 
- * 此函数启动 OpenClaw 应用程序，将命令行参数传递给它。
- * 应用程序的退出码将被返回，用于判断是否成功运行。
- */
+// lyc: 运行/openclaw.mjs, 并返回exitCode
 const runOpenClaw = async (deps) => {
   /* lyc: 命令参数, 例如: node myscript.js arg1 arg2 arg3, process.argv=['node', '/path/to/myscript.js', 'arg1', 'arg2', 'arg3'].slice(2)=['arg1', 'arg2', 'arg3']
     deps.args 为命令行参数, 例如: ['arg1', 'arg2', 'arg3']

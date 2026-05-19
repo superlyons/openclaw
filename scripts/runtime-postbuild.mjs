@@ -33,7 +33,7 @@ export const STATIC_EXTENSION_ASSETS = [
   },
 ];
 
-/** lyc:ai
+/** lyc
  * 获取静态扩展资源的输出路径列表
  * 
  * 此函数返回所有静态扩展资源在分发目录中的目标路径列表，
@@ -51,7 +51,7 @@ export function listStaticExtensionAssetOutputs(params = {}) {
     .toSorted((left, right) => left.localeCompare(right));
 }
 
-/** lyc:ai
+/** lyc
  * 复制静态扩展资源文件到分发目录
  * 
  * 某些扩展在运行时需要引用特定的静态资源文件，这些文件在捆绑的扩展代码中
@@ -85,7 +85,7 @@ export function copyStaticExtensionAssets(params = {}) {
   }
 }
 
-/** lyc:ai
+/** lyc
  * 为带哈希的运行时文件创建稳定的别名
  * 
  * 在构建过程中，运行时文件通常会被添加内容哈希（如 main-abc123.js）。
@@ -123,7 +123,7 @@ export function writeStableRootRuntimeAliases(params = {}) {
   }
 }
 
-/** lyc:ai
+/** lyc
  * lyc: 执行运行时后构建脚本, 就是在运行时才构建的一些文件
  * 执行运行时后构建(post-build)流程
  * 

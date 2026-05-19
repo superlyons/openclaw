@@ -91,7 +91,7 @@ export function buildOfficialChannelCatalog(params = {}) {
   return { entries };
 }
 
-/** lyc:ai
+/** lyc:
  * 生成并写入官方频道目录文件
  * 
  * 此函数扫描 extensions/ 目录下的所有插件，根据每个插件的 package.json

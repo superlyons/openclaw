@@ -1215,7 +1215,7 @@ function installPluginRuntimeDeps(params) {
   }
 }
 
-/** lyc:ai
+/** lyc
  * 分阶段处理捆绑插件的运行时依赖
  * 
  * 此函数为标记了 bundle.stageRuntimeDependencies=true 的插件
