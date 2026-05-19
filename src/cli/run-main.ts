@@ -298,8 +298,10 @@ export async function runCli(argv: string[] = process.argv) {
     // lyc: 检查调试代理覆盖情况, 并在必要时警告(仅在新会话中输出警告)
     maybeWarnAboutDebugProxyCoverage();
 
+    // lyc:aic L3 快速路径（3 层梯队的最后一层；L1/L2 在 src/entry.ts:193 / :200）。
+    //         L3 命中即执行并 return，未命中（return false）→ 落入下方 buildProgram 慢路径。
     const { tryRouteCli } = await import("./route.js");
-    /* lyc: 
+    /* lyc:
       检查是否可以使用快速路径执行命令, 可以则执行并返回, 否则继续执行主流程
       快速路径命令 ：
       - health ：健康检查
@@ -324,6 +326,10 @@ export async function runCli(argv: string[] = process.argv) {
       return;
     }
 
+    // lyc:aic ====== 慢路径起点 ======
+    // 3 层快速路径（L1=--version, L2=根 --help, L3=tryRouteCli）全部未命中，
+    // 才执行下面这段：构建完整 Commander 程序、注册命令、解析 argv。
+    // 5 步骤：enableConsoleCapture → buildProgram → 错误处理器 → 命令注册(core/subcli/plugin) → program.parseAsync
     const { createCliProgress } = await import("./progress.js");
     const startupProgress = createCliProgress({
       label: "Loading OpenClaw CLI…",

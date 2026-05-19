@@ -15,6 +15,19 @@ import { ensureOpenClawExecMarkerOnProcess } from "./infra/openclaw-exec-env.js"
 import { installProcessWarningFilter } from "./infra/warning-filter.js";
 import { attachChildProcessBridge } from "./process/child-process-bridge.js";
 
+/* lyc:aic
+entry.ts 主线骨架（4 阶段；本文件无 main 函数，顶层 if/else 块即入口逻辑）：
+  [1] isMainModule 守卫 (line 52)        防 bundler 重复启动
+  [2] 进程级初始化     (line 73-100)     title/env/警告/编译缓存
+  [3] Respawn 分支     (line 156)        必要时 spawn 新 node 子进程，父进程退出
+  [4] 参数解析+路由    (line 160-196)    container/profile → version/help 快速路径 → runCli
+
+3 层快速路径梯队（都为绕开 Commander 加载）：
+  L1 tryHandleRootVersionFastPath  (本文件 line 193)         `--version` / `-v`
+  L2 tryHandleRootHelpFastPath     (本文件 line 200)         根级 `--help`
+  L3 tryRouteCli                   (src/cli/run-main.ts:301) 13 个轻量命令
+  3 层都没命中 → 进 buildProgram 慢路径 (src/cli/program.ts)
+*/
 // lyc: 定义了包装器文件与实际入口文件的映射关系, openclaw.mjs 和 openclaw.js 是包装器，它们会导入 entry.js, 这样 isMainModule 可以正确识别主入口文件
 const ENTRY_WRAPPER_PAIRS = [
   { wrapperBasename: "openclaw.mjs", entryBasename: "entry.js" },
@@ -99,6 +112,16 @@ if (
     process.env.FORCE_COLOR = "0";
   }
 
+  /* lyc:aic
+  Respawn 机制的本质：
+  某些 Node flag（--max-old-space-size / --no-warnings 等）必须**启动时**
+  传给 node 可执行文件，运行时无法动态设置。需要时就 spawn 一个带正确 flag
+  的新 node 子进程，父进程退出。
+
+  实际后果：`npm run dev` 启动后会看到**两个 node 进程**——父进程是短命启动器，
+  子进程才是真正跑 CLI 的。attachChildProcessBridge 负责把外部信号（Ctrl-C 等）
+  从父进程透传给子进程。
+  */
   /* lyc:ai
   确保CLI重启动准备就绪函数
   此函数负责检查是否需要重新启动CLI进程，并在需要时创建子进程来执行重启动操作。
@@ -189,6 +212,7 @@ if (
       process.argv = parsed.argv;
     }
 
+    // lyc:aic L1 快速路径：处理 `--version` / `-v`。3 层快速路径梯队的第 1 层。
     // lyc: 处理根版本命令, 如果不是根版本命令, 则继续执行主命令runMainOrRootHelp
     if (!tryHandleRootVersionFastPath(process.argv)) {
       await runMainOrRootHelp(process.argv);
@@ -196,6 +220,7 @@ if (
   }
 }
 
+// lyc:aic L2 快速路径：处理根级 `--help`。3 层快速路径梯队的第 2 层。
 // lyc: 处理根帮助命令, 如果不是根帮助命令, 则继续执行主命令runMainOrRootHelp
 export async function tryHandleRootHelpFastPath(
   argv: string[],
@@ -246,6 +271,8 @@ async function runMainOrRootHelp(argv: string[]): Promise<void> {
     return;
   }
   try {
+    // lyc:aic 移交给 src/cli/run-main.ts 的 runCli — 内部还有 L3 tryRouteCli 一次拦截，
+    //        都没命中才进入 buildProgram 慢路径。
     const { runCli } = await import("./cli/run-main.js");
     await runCli(argv);
   } catch (error) {

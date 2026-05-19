@@ -50,7 +50,15 @@ async function prepareRoutedCommand(params: {
   });
 }
 
-/* lyc:ai 
+/* lyc:aic
+L3 快速路径：3 层快速路径梯队的最后一层。
+  L1 tryHandleRootVersionFastPath (src/entry.ts:193) — `--version` / `-v`
+  L2 tryHandleRootHelpFastPath    (src/entry.ts:200) — 根级 `--help`
+  L3 tryRouteCli                  (本函数)            — 13 个轻量命令
+L3 返回 false 时，调用方（src/cli/run-main.ts）会落入 buildProgram 慢路径。
+通过 OPENCLAW_DISABLE_ROUTE_FIRST=1 可强制禁用 L3，调试主流程时有用。
+*/
+/* lyc:ai
 tryRouteCli 函数是 CLI 快速路径路由的核心入口点。
 它尝试将命令行参数路由到预定义的快速路径命令，避免加载完整的 Commander 程序，
 从而提高启动速度和减少资源消耗。
