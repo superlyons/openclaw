@@ -37,13 +37,26 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f2328; background: #fff; }
-  .layout { display: flex; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; position: relative; }
   .sidebar {
     width: var(--sidebar-w); flex-shrink: 0;
     border-right: 1px solid #d1d9e0; background: #f6f8fa;
     padding: 16px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
     font-size: 13px;
+    transition: margin-left 0.18s ease, opacity 0.18s ease;
   }
+  body.sidebar-hidden .sidebar { margin-left: calc(0px - var(--sidebar-w)); opacity: 0; pointer-events: none; }
+  .sidebar-toggle {
+    position: fixed; top: 14px; left: 14px; z-index: 50;
+    width: 32px; height: 32px; border-radius: 6px;
+    background: rgba(255,255,255,0.92); border: 1px solid #d1d9e0;
+    cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: #57606a;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    transition: left 0.18s ease;
+  }
+  .sidebar-toggle:hover { background: #f6f8fa; color: #1f2328; }
+  body:not(.sidebar-hidden) .sidebar-toggle { left: calc(var(--sidebar-w) - 22px); }
   .sidebar h1 { font-size: 14px; margin: 0 0 12px; color: #57606a; text-transform: uppercase; letter-spacing: .04em; }
   .sidebar ul { list-style: none; padding: 0; margin: 0 0 16px; }
   .sidebar .group-title { font-size: 11px; color: #8c959f; text-transform: uppercase; margin: 12px 4px 4px; }
@@ -95,6 +108,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
+<button class="sidebar-toggle" id="sidebar-toggle" title="切换目录 (Ctrl+B)">☰</button>
 <div class="layout">
   <aside class="sidebar">
     <h1>OpenClaw 学习文档</h1>
@@ -147,6 +161,27 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   marked.setOptions({ renderer, gfm: true, breaks: false });
 
   document.getElementById("content").innerHTML = marked.parse(RAW_MD);
+
+  // 侧边栏切换（localStorage 记住状态，跨文档保持）
+  const SIDEBAR_KEY = "openclaw_study_sidebar_hidden";
+  const sidebarToggle = document.getElementById("sidebar-toggle");
+  function applySidebarState(hidden) {
+    document.body.classList.toggle("sidebar-hidden", hidden);
+    sidebarToggle.textContent = hidden ? "☰" : "✕";
+    sidebarToggle.title = hidden ? "显示目录 (Ctrl+B)" : "隐藏目录 (Ctrl+B)";
+  }
+  applySidebarState(localStorage.getItem(SIDEBAR_KEY) === "1");
+  sidebarToggle.addEventListener("click", () => {
+    const next = !document.body.classList.contains("sidebar-hidden");
+    localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+    applySidebarState(next);
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      e.preventDefault();
+      sidebarToggle.click();
+    }
+  });
 
   // Store mermaid sources for viewer
   const mermaidSources = [];
