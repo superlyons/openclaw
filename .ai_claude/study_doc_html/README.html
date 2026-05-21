@@ -49,31 +49,7 @@
     margin: 0; padding: 12px 14px; background: transparent;
     overflow-x: auto; font-size: 12px; line-height: 1.5;
   }
-  /* modal */
-  .modal-mask {
-    position: fixed; inset: 0; background: rgba(0,0,0,.55);
-    display: none; align-items: center; justify-content: center;
-    z-index: 1000; padding: 20px;
-  }
-  .modal-mask.open { display: flex; }
-  .modal-box {
-    background: white; border-radius: 8px;
-    max-width: 95vw; max-height: 92vh; overflow: auto;
-    padding: 16px 20px; min-width: 320px;
-    box-shadow: 0 10px 40px rgba(0,0,0,.3);
-  }
-  .modal-box .head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 12px; border-bottom: 1px solid #d1d9e0; padding-bottom: 8px;
-  }
-  .modal-box .head h3 { margin: 0; font-size: 14px; color: #57606a; }
-  .modal-box .btn-close {
-    background: none; border: none; font-size: 22px; cursor: pointer;
-    color: #57606a; padding: 0 6px; line-height: 1;
-  }
-  .modal-box .btn-close:hover { color: #cf222e; }
-  .modal-box .diagram { text-align: center; }
-  .modal-box .diagram svg { max-width: 100%; height: auto; }
+  /* (modal removed — viewer is in a new window via openMermaidWindow) */
   /* doc meta header */
   .doc-meta {
     background: #fff8c5; border-left: 4px solid #d4a72c;
@@ -118,21 +94,8 @@
   </main>
 </div>
 
-<div class="modal-mask" id="modal">
-  <div class="modal-box">
-    <div class="head">
-      <h3 id="modal-title">流程图</h3>
-      <button class="btn-close" onclick="closeModal()">×</button>
-    </div>
-    <div class="diagram" id="modal-diagram"></div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 <script>
-  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
-
   const RAW_MD = "<!-- doc-version: v2026.5.18 -->\n<!-- last-verified: 2026-05-21 -->\n\n# OpenClaw \u5b66\u4e60\u6587\u6863\n\n\u8fd9\u662f\u4e00\u4efd**\u4e3a\u7a0b\u5e8f\u5458\u4ece\u96f6\u5f00\u59cb\u5b66\u4e60 OpenClaw \u6e90\u7801**\u800c\u5199\u7684\u5185\u90e8\u673a\u5236\u6587\u6863\uff0c\u914d\u5408 [`.ai_claude/progress.md`](../progress.md)\uff08\u4e2a\u4eba\u5b66\u4e60\u8fdb\u5ea6\uff09\u4e00\u8d77\u4f7f\u7528\u3002\n\n**\u91cd\u8981\u524d\u63d0**\uff1a\u672c\u6587\u6863\u7684\u8bfb\u8005 lyc**\u4ece\u672a\u8fd0\u884c\u8fc7 OpenClaw**\uff0c\u7eaf\u9760\u8bfb\u6e90\u7801\u5b66\u4e60\u3002\u56e0\u6b64\uff1a\n- \u6bcf\u4e2a\u62bd\u8c61\u6982\u5ff5\u90fd\u914d**\u5177\u4f53\u4f8b\u5b50**\uff08\u547d\u4ee4\u8f93\u5165 + \u9884\u671f\u8f93\u51fa / \u884c\u4e3a\uff09\n- **\u4e0d\u5047\u8bbe**\u8bfb\u8005\u8dd1\u8fc7\u4efb\u4f55 openclaw \u547d\u4ee4\n- \u6d89\u53ca\u547d\u4ee4\u884c\u4e3a\u65f6\uff0c\u660e\u786e\u6807\u6ce8\"\u6839\u636e\u4ee3\u7801\u63a8\u65ad\"\u6216\"\u5047\u8bbe\u4f60\u8dd1\u4e86 X\uff0c\u4f1a\u770b\u5230 Y\"\n\n\u8be6\u7ec6\u89c4\u7ea6\u89c1 [`_meta/doc-conventions.md`](_meta/doc-conventions.md)\u3002\n\n## \u600e\u4e48\u9605\u8bfb\uff08\u63a8\u8350\uff1aHTML \u7248\u672c\uff09\n\nMD \u6587\u4ef6\u5728\u7ec8\u7aef / \u666e\u901a\u7f16\u8f91\u5668\u91cc**\u8868\u683c\u548c mermaid \u6d41\u7a0b\u56fe\u90fd\u663e\u793a\u7cdf\u7cd5**\u3002\u6211\u4eec\u63d0\u4f9b\u914d\u5957 HTML\uff1a\n\n```bash\n# \u5728\u9879\u76ee\u6839\u76ee\u5f55\u8fd0\u884c\npython .ai_claude/study_doc/_meta/gen-html.py\n```\n\n\u751f\u6210\u7684 HTML \u5728 [`../study_doc_html/`](../study_doc_html/) \u76ee\u5f55\uff0c**\u76f4\u63a5\u53cc\u51fb `index.html` \u7528\u6d4f\u89c8\u5668\u6253\u5f00**\u5373\u53ef\u9605\u8bfb\u3002\u7279\u6027\uff1a\n\n- \u2705 \u8868\u683c\u7528 GitHub \u6837\u5f0f\u6e32\u67d3\uff08\u4e0d\u518d\u9519\u4f4d\uff09\n- \u2705 Mermaid \u4ee3\u7801\u5757**\u9ed8\u8ba4\u663e\u793a\u539f\u59cb\u4ee3\u7801**\uff0c\u914d \"\u67e5\u770b\u56fe\u8868\" \u6309\u94ae\uff0c\u70b9\u51fb\u5f39\u51fa\u6e32\u67d3\u56fe\n- \u2705 \u5de6\u4fa7\u4fa7\u8fb9\u680f\u5bfc\u822a\u6240\u6709\u6587\u6863\n- \u2705 `[X](other.md)` \u94fe\u63a5\u81ea\u52a8\u8f6c `.html`\uff0c\u6d4f\u89c8\u5668\u5185\u53ef\u70b9\u51fb\u8df3\u8f6c\n- \u2705 \u9700\u8981\u8054\u7f51\uff08marked + mermaid \u8d70 CDN\uff09\n\n**\u7f16\u8f91 MD \u540e**\uff1a\u91cd\u65b0\u8dd1 `python .ai_claude/study_doc/_meta/gen-html.py` \u4e00\u884c\u5c31\u591f\u3002\u751f\u6210\u7684 HTML \u8ddf\u968f MD \u4e00\u8d77\u63d0\u4ea4\uff08\u5c0f\u6587\u4ef6\u3001\u7acb\u5373\u53ef\u8bfb\u3001\u8de8\u673a\u65b9\u4fbf\uff09\u3002\n\n## \u6587\u6863\u5206\u5c42\n\n| \u5c42 | \u76ee\u5f55 | \u6211\u4eec\u5199\u7684\u5185\u5bb9 |\n|---|---|---|\n| L1 \u7528\u6237\u89c6\u89d2 | [`10-usage/`](10-usage/) | **\u4e0d\u590d\u5236**\u5b98\u65b9\u6587\u6863\uff0c\u53ea\u653e\u94fe\u63a5\u7d22\u5f15 |\n| L2 \u5168\u666f\u6982\u5ff5 | [`00-overview/`](00-overview/) | \u4e00\u53e5\u8bdd\u5b9a\u4f4d\u3001\u672f\u8bed\u8868\u3001\u4ee3\u7801\u5e93\u5730\u56fe |\n| L3 \u5185\u90e8\u673a\u5236 \u2605 | [`20-mechanism/`](20-mechanism/) | **\u672c\u6587\u6863\u6838\u5fc3**\u2014\u2014\u6bcf\u4e2a\u6838\u5fc3\u6a21\u5757\u7684\u6d41\u7a0b\u3001\u6982\u5ff5\u3001\u6e90\u7801\u8ffd\u8e2a |\n| L4 \u6df1\u5ea6\u4e13\u9898 | [`30-deep-dive/`](30-deep-dive/) | \u7279\u5b9a\u96be\u70b9\u7684\u72ec\u7acb\u4e13\u9898 |\n\n## \u6587\u6863\u7d22\u5f15\n\n### 00-overview/ \u603b\u89c8\n\n- [ ] [`what-is-openclaw.md`](00-overview/what-is-openclaw.md) \u2014 OpenClaw \u4e00\u53e5\u8bdd\u5b9a\u4f4d + \u6838\u5fc3\u6982\u5ff5\n- [ ] [`codebase-map.md`](00-overview/codebase-map.md) \u2014 `src/` 60+ \u5b50\u76ee\u5f55\u5206\u7c7b\n- [ ] [`glossary.md`](00-overview/glossary.md) \u2014 \u672f\u8bed\u8868\uff08Crestodian / ACP / Channel / Agent \u7b49\uff09\n\n### 10-usage/ \u4f7f\u7528\u5c42\n\n- [ ] [`_index.md`](10-usage/_index.md) \u2014 \u94fe\u63a5\u5230 docs.openclaw.ai \u7684\u7d22\u5f15\n\n### 20-mechanism/ \u5185\u90e8\u673a\u5236 \u2605\n\n- [x] [`01-startup-flow.md`](20-mechanism/01-startup-flow.md) \u2014 **\u542f\u52a8\u6d41\u7a0b**\uff1a\u4ece `npm run dev` \u5230\u547d\u4ee4\u5206\u53d1\n- [ ] [`02-cli-routing.md`](20-mechanism/02-cli-routing.md) \u2014 CLI \u8def\u7531\uff1a3 \u5c42\u5feb\u901f\u8def\u5f84 + Commander \u6162\u8def\u5f84\n- [ ] [`03-plugin-system.md`](20-mechanism/03-plugin-system.md) \u2014 \u63d2\u4ef6\u7cfb\u7edf\n- [ ] [`04-channel-architecture.md`](20-mechanism/04-channel-architecture.md) \u2014 Channel \u62bd\u8c61\u4e0e\u9002\u914d\u5668\n- [ ] [`05-agent-runtime.md`](20-mechanism/05-agent-runtime.md) \u2014 Agent \u8fd0\u884c\u65f6\n- [ ] [`06-message-flow.md`](20-mechanism/06-message-flow.md) \u2014 \u6d88\u606f\u7aef\u5230\u7aef\u6d41\u8f6c\n- [ ] [`07-config-system.md`](20-mechanism/07-config-system.md) \u2014 \u914d\u7f6e\u52a0\u8f7d\u4e0e\u9a8c\u8bc1\n- [ ] [`08-gateway.md`](20-mechanism/08-gateway.md) \u2014 \u7f51\u5173\n\n\uff08\u66f4\u591a\u6309\u5b66\u4e60\u8fdb\u5ea6\u6dfb\u52a0\uff09\n\n### 30-deep-dive/ \u6df1\u5ea6\u4e13\u9898\n\n\u6309\u9700\u6dfb\u52a0\u3002\u4f8b\u5982\uff1a\n- `compile-cache-respawn.md` \u2014 v2026.5 \u65b0\u589e\u7684 compile-cache \u5b88\u536b\u673a\u5236\u8be6\u89e3\n- `fast-path-tiers.md` \u2014 3 \u5c42\u5feb\u901f\u8def\u5f84\u7684\u8bbe\u8ba1\u52a8\u673a\u4e0e\u8fb9\u754c\n\n## \u91cd\u8981\n\n- [`_meta/doc-conventions.md`](_meta/doc-conventions.md) \u2014 \u6587\u6863\u89c4\u7ea6\uff08\u7248\u672c\u6233\u3001Mermaid \u98ce\u683c\u3001\u6e90\u7801\u94fe\u63a5\u683c\u5f0f\u3001\"\u62bd\u8c61\u6982\u5ff5\u2192\u4f8b\u5b50\"\u6a21\u677f\uff09\n- [`_meta/update-protocol.md`](_meta/update-protocol.md) \u2014 \u5982\u4f55\u8ba9 Claude \u66f4\u65b0/\u91cd\u5efa\u6587\u6863\n\n## \u72b6\u6001\u7ea6\u5b9a\n\n\u6587\u6863\u524d\u7684\u590d\u9009\u6846\uff1a\n- `[x]` \u2014 \u5df2\u5b8c\u6210\u3001\u5df2\u9a8c\u8bc1\n- `[ ]` \u2014 \u5f85\u5199\u6216\u5f85\u8865\n";
 
   // Custom renderer: convert mermaid fenced blocks to our custom HTML
@@ -146,7 +109,7 @@
         <div class="mermaid-block" data-mermaid-idx="${idx}">
           <div class="mermaid-header">
             <span>🖼 Mermaid 流程图 #${idx + 1}</span>
-            <button class="btn-view" onclick="viewMermaid(${idx})">查看图表</button>
+            <button class="btn-view" onclick="openMermaidWindow(${idx})">在新窗口查看图表 ↗</button>
           </div>
           <pre><code class="language-mermaid">${escaped}</code></pre>
         </div>`;
@@ -171,7 +134,7 @@
 
   document.getElementById("content").innerHTML = marked.parse(RAW_MD);
 
-  // Store mermaid sources for modal
+  // Store mermaid sources for viewer
   const mermaidSources = [];
   document.querySelectorAll(".mermaid-block").forEach(block => {
     const idx = parseInt(block.dataset.mermaidIdx, 10);
@@ -179,33 +142,174 @@
     mermaidSources[idx] = codeEl.textContent;
   });
 
-  window.viewMermaid = async function(idx) {
+  // Open mermaid diagram in a new window with zoom/pan
+  window.openMermaidWindow = function(idx) {
     const src = mermaidSources[idx];
-    const modal = document.getElementById("modal");
-    const dia = document.getElementById("modal-diagram");
-    const title = document.getElementById("modal-title");
-    title.textContent = `流程图 #${idx + 1}`;
-    dia.innerHTML = "正在渲染...";
-    modal.classList.add("open");
-    try {
-      const { svg } = await mermaid.render(`m-${Date.now()}-${idx}`, src);
-      dia.innerHTML = svg;
-    } catch (e) {
-      dia.innerHTML = `<pre style="color:#cf222e">渲染失败：\n${e.message || e}</pre>`;
+    const w = window.open("", "_blank", "width=1200,height=820");
+    if (!w) {
+      alert("浏览器阻止了新窗口弹出。请允许此页面打开新窗口。");
+      return;
     }
+    const docTitle = document.title.split(" | ")[0] || "Mermaid";
+    w.document.write(VIEWER_HTML
+      .replace("__MERMAID_SRC__", JSON.stringify(src))
+      .replace("OpenClaw 学习文档", `图 #${idx + 1} · ${docTitle}`));
+    w.document.close();
   };
 
-  window.closeModal = function() {
-    document.getElementById("modal").classList.remove("open");
-  };
+  // Viewer page (string) — opened in new window, self-contained
+  const VIEWER_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>OpenClaw 学习文档</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f6f8fa; }
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 44px;
+    background: rgba(255,255,255,0.95); border-bottom: 1px solid #d1d9e0;
+    display: flex; align-items: center; padding: 0 16px; gap: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    z-index: 10; backdrop-filter: blur(8px);
+    font-size: 13px;
+  }
+  .toolbar .title { font-weight: 600; color: #1f2328; margin-right: auto; }
+  .toolbar button {
+    background: #f6f8fa; border: 1px solid #d1d9e0; padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 12px; color: #1f2328;
+  }
+  .toolbar button:hover { background: #eaeef2; }
+  .toolbar .zoom-val { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; color: #57606a; }
+  .toolbar .hint { color: #8c959f; font-size: 11px; margin-left: 8px; }
+  .viewport {
+    position: absolute; inset: 44px 0 0 0;
+    overflow: hidden; cursor: grab; user-select: none;
+    background: #fafbfc;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .viewport.dragging { cursor: grabbing; }
+  .diagram-wrap {
+    position: absolute; left: 50%; top: 50%;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  .diagram-wrap svg { display: block; max-width: none !important; max-height: none !important; height: auto !important; }
+  .err { padding: 20px; color: #cf222e; font-family: monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="title">OpenClaw 学习文档</span>
+  <button onclick="zoom(0.8)">−</button>
+  <span class="zoom-val" id="zv">100%</span>
+  <button onclick="zoom(1.25)">+</button>
+  <button onclick="resetView()">重置</button>
+  <button onclick="fitView()">适配</button>
+  <span class="hint">滚轮缩放 · 拖拽移动 · +/-/0 快捷键</span>
+</div>
+<div class="viewport" id="viewport">
+  <div class="diagram-wrap" id="wrap">渲染中...</div>
+</div>
 
-  document.getElementById("modal").addEventListener("click", function(e) {
-    if (e.target === this) closeModal();
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"><\/script>
+<script>
+  const SRC = __MERMAID_SRC__;
+  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose", maxTextSize: 100000 });
+
+  const vp = document.getElementById("viewport");
+  const wrap = document.getElementById("wrap");
+  const zv = document.getElementById("zv");
+
+  let scale = 1, panX = 0, panY = 0;
+  const MIN_SCALE = 0.1, MAX_SCALE = 8;
+
+  function update() {
+    wrap.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + scale + ")";
+    zv.textContent = Math.round(scale * 100) + "%";
+  }
+
+  function zoom(factor, cx, cy) {
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    const realFactor = next / scale;
+    if (cx === undefined) {
+      // zoom centered on viewport center
+      const rect = vp.getBoundingClientRect();
+      cx = rect.width / 2; cy = rect.height / 2;
+    }
+    // keep point (cx,cy in viewport coords) fixed
+    panX = cx - (cx - panX) * realFactor;
+    panY = cy - (cy - panY) * realFactor;
+    scale = next;
+    update();
+  }
+
+  function resetView() { scale = 1; panX = vp.clientWidth / 2; panY = vp.clientHeight / 2; update(); }
+
+  function fitView() {
+    // Reset transform first to measure natural size
+    const prev = wrap.style.transform;
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
+    const svg = wrap.querySelector("svg");
+    if (!svg) { wrap.style.transform = prev; return; }
+    const bb = svg.getBoundingClientRect();
+    const vbb = vp.getBoundingClientRect();
+    const fit = Math.min(vbb.width / bb.width, vbb.height / bb.height) * 0.9;
+    scale = fit;
+    panX = vp.clientWidth / 2;
+    panY = vp.clientHeight / 2;
+    update();
+  }
+
+  // Wheel zoom
+  vp.addEventListener("wheel", e => {
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    zoom(factor, cx, cy);
+  }, { passive: false });
+
+  // Drag pan
+  let dragging = false, dragStartX = 0, dragStartY = 0;
+  vp.addEventListener("mousedown", e => {
+    dragging = true; vp.classList.add("dragging");
+    dragStartX = e.clientX - panX; dragStartY = e.clientY - panY;
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    panX = e.clientX - dragStartX; panY = e.clientY - dragStartY;
+    update();
+  });
+  window.addEventListener("mouseup", () => { dragging = false; vp.classList.remove("dragging"); });
+
+  // Keyboard
+  window.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "+" || e.key === "=") { e.preventDefault(); zoom(1.25); }
+    else if (e.key === "-" || e.key === "_") { e.preventDefault(); zoom(0.8); }
+    else if (e.key === "0") { e.preventDefault(); resetView(); }
+    else if (e.key === "f" || e.key === "F") { e.preventDefault(); fitView(); }
   });
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeModal();
-  });
+  // Render
+  (async () => {
+    try {
+      const { svg } = await mermaid.render("m-" + Date.now(), SRC);
+      wrap.innerHTML = svg;
+      // Center on first render
+      requestAnimationFrame(() => fitView());
+    } catch (e) {
+      wrap.innerHTML = '<div class="err">渲染失败：\\n' + (e.message || e) + '</div>';
+    }
+  })();
+<\/script>
+</body>
+</html>`;
 </script>
 </body>
 </html>

@@ -74,31 +74,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     margin: 0; padding: 12px 14px; background: transparent;
     overflow-x: auto; font-size: 12px; line-height: 1.5;
   }
-  /* modal */
-  .modal-mask {
-    position: fixed; inset: 0; background: rgba(0,0,0,.55);
-    display: none; align-items: center; justify-content: center;
-    z-index: 1000; padding: 20px;
-  }
-  .modal-mask.open { display: flex; }
-  .modal-box {
-    background: white; border-radius: 8px;
-    max-width: 95vw; max-height: 92vh; overflow: auto;
-    padding: 16px 20px; min-width: 320px;
-    box-shadow: 0 10px 40px rgba(0,0,0,.3);
-  }
-  .modal-box .head {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 12px; border-bottom: 1px solid #d1d9e0; padding-bottom: 8px;
-  }
-  .modal-box .head h3 { margin: 0; font-size: 14px; color: #57606a; }
-  .modal-box .btn-close {
-    background: none; border: none; font-size: 22px; cursor: pointer;
-    color: #57606a; padding: 0 6px; line-height: 1;
-  }
-  .modal-box .btn-close:hover { color: #cf222e; }
-  .modal-box .diagram { text-align: center; }
-  .modal-box .diagram svg { max-width: 100%; height: auto; }
+  /* (modal removed — viewer is in a new window via openMermaidWindow) */
   /* doc meta header */
   .doc-meta {
     background: #fff8c5; border-left: 4px solid #d4a72c;
@@ -132,21 +108,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   </main>
 </div>
 
-<div class="modal-mask" id="modal">
-  <div class="modal-box">
-    <div class="head">
-      <h3 id="modal-title">流程图</h3>
-      <button class="btn-close" onclick="closeModal()">×</button>
-    </div>
-    <div class="diagram" id="modal-diagram"></div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
 <script>
-  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
-
   const RAW_MD = __MD_JSON__;
 
   // Custom renderer: convert mermaid fenced blocks to our custom HTML
@@ -160,7 +123,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
         <div class="mermaid-block" data-mermaid-idx="${idx}">
           <div class="mermaid-header">
             <span>🖼 Mermaid 流程图 #${idx + 1}</span>
-            <button class="btn-view" onclick="viewMermaid(${idx})">查看图表</button>
+            <button class="btn-view" onclick="openMermaidWindow(${idx})">在新窗口查看图表 ↗</button>
           </div>
           <pre><code class="language-mermaid">${escaped}</code></pre>
         </div>`;
@@ -185,7 +148,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   document.getElementById("content").innerHTML = marked.parse(RAW_MD);
 
-  // Store mermaid sources for modal
+  // Store mermaid sources for viewer
   const mermaidSources = [];
   document.querySelectorAll(".mermaid-block").forEach(block => {
     const idx = parseInt(block.dataset.mermaidIdx, 10);
@@ -193,33 +156,174 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     mermaidSources[idx] = codeEl.textContent;
   });
 
-  window.viewMermaid = async function(idx) {
+  // Open mermaid diagram in a new window with zoom/pan
+  window.openMermaidWindow = function(idx) {
     const src = mermaidSources[idx];
-    const modal = document.getElementById("modal");
-    const dia = document.getElementById("modal-diagram");
-    const title = document.getElementById("modal-title");
-    title.textContent = `流程图 #${idx + 1}`;
-    dia.innerHTML = "正在渲染...";
-    modal.classList.add("open");
-    try {
-      const { svg } = await mermaid.render(`m-${Date.now()}-${idx}`, src);
-      dia.innerHTML = svg;
-    } catch (e) {
-      dia.innerHTML = `<pre style="color:#cf222e">渲染失败：\n${e.message || e}</pre>`;
+    const w = window.open("", "_blank", "width=1200,height=820");
+    if (!w) {
+      alert("浏览器阻止了新窗口弹出。请允许此页面打开新窗口。");
+      return;
     }
+    const docTitle = document.title.split(" | ")[0] || "Mermaid";
+    w.document.write(VIEWER_HTML
+      .replace("__MERMAID_SRC__", JSON.stringify(src))
+      .replace("__TITLE__", `图 #${idx + 1} · ${docTitle}`));
+    w.document.close();
   };
 
-  window.closeModal = function() {
-    document.getElementById("modal").classList.remove("open");
-  };
+  // Viewer page (string) — opened in new window, self-contained
+  const VIEWER_HTML = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f6f8fa; }
+  .toolbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 44px;
+    background: rgba(255,255,255,0.95); border-bottom: 1px solid #d1d9e0;
+    display: flex; align-items: center; padding: 0 16px; gap: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    z-index: 10; backdrop-filter: blur(8px);
+    font-size: 13px;
+  }
+  .toolbar .title { font-weight: 600; color: #1f2328; margin-right: auto; }
+  .toolbar button {
+    background: #f6f8fa; border: 1px solid #d1d9e0; padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-size: 12px; color: #1f2328;
+  }
+  .toolbar button:hover { background: #eaeef2; }
+  .toolbar .zoom-val { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; color: #57606a; }
+  .toolbar .hint { color: #8c959f; font-size: 11px; margin-left: 8px; }
+  .viewport {
+    position: absolute; inset: 44px 0 0 0;
+    overflow: hidden; cursor: grab; user-select: none;
+    background: #fafbfc;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .viewport.dragging { cursor: grabbing; }
+  .diagram-wrap {
+    position: absolute; left: 50%; top: 50%;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  .diagram-wrap svg { display: block; max-width: none !important; max-height: none !important; height: auto !important; }
+  .err { padding: 20px; color: #cf222e; font-family: monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="title">__TITLE__</span>
+  <button onclick="zoom(0.8)">−</button>
+  <span class="zoom-val" id="zv">100%</span>
+  <button onclick="zoom(1.25)">+</button>
+  <button onclick="resetView()">重置</button>
+  <button onclick="fitView()">适配</button>
+  <span class="hint">滚轮缩放 · 拖拽移动 · +/-/0 快捷键</span>
+</div>
+<div class="viewport" id="viewport">
+  <div class="diagram-wrap" id="wrap">渲染中...</div>
+</div>
 
-  document.getElementById("modal").addEventListener("click", function(e) {
-    if (e.target === this) closeModal();
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"><\/script>
+<script>
+  const SRC = __MERMAID_SRC__;
+  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose", maxTextSize: 100000 });
+
+  const vp = document.getElementById("viewport");
+  const wrap = document.getElementById("wrap");
+  const zv = document.getElementById("zv");
+
+  let scale = 1, panX = 0, panY = 0;
+  const MIN_SCALE = 0.1, MAX_SCALE = 8;
+
+  function update() {
+    wrap.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + scale + ")";
+    zv.textContent = Math.round(scale * 100) + "%";
+  }
+
+  function zoom(factor, cx, cy) {
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
+    const realFactor = next / scale;
+    if (cx === undefined) {
+      // zoom centered on viewport center
+      const rect = vp.getBoundingClientRect();
+      cx = rect.width / 2; cy = rect.height / 2;
+    }
+    // keep point (cx,cy in viewport coords) fixed
+    panX = cx - (cx - panX) * realFactor;
+    panY = cy - (cy - panY) * realFactor;
+    scale = next;
+    update();
+  }
+
+  function resetView() { scale = 1; panX = vp.clientWidth / 2; panY = vp.clientHeight / 2; update(); }
+
+  function fitView() {
+    // Reset transform first to measure natural size
+    const prev = wrap.style.transform;
+    wrap.style.transform = "translate(-50%, -50%) scale(1)";
+    const svg = wrap.querySelector("svg");
+    if (!svg) { wrap.style.transform = prev; return; }
+    const bb = svg.getBoundingClientRect();
+    const vbb = vp.getBoundingClientRect();
+    const fit = Math.min(vbb.width / bb.width, vbb.height / bb.height) * 0.9;
+    scale = fit;
+    panX = vp.clientWidth / 2;
+    panY = vp.clientHeight / 2;
+    update();
+  }
+
+  // Wheel zoom
+  vp.addEventListener("wheel", e => {
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+    zoom(factor, cx, cy);
+  }, { passive: false });
+
+  // Drag pan
+  let dragging = false, dragStartX = 0, dragStartY = 0;
+  vp.addEventListener("mousedown", e => {
+    dragging = true; vp.classList.add("dragging");
+    dragStartX = e.clientX - panX; dragStartY = e.clientY - panY;
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    panX = e.clientX - dragStartX; panY = e.clientY - dragStartY;
+    update();
+  });
+  window.addEventListener("mouseup", () => { dragging = false; vp.classList.remove("dragging"); });
+
+  // Keyboard
+  window.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "+" || e.key === "=") { e.preventDefault(); zoom(1.25); }
+    else if (e.key === "-" || e.key === "_") { e.preventDefault(); zoom(0.8); }
+    else if (e.key === "0") { e.preventDefault(); resetView(); }
+    else if (e.key === "f" || e.key === "F") { e.preventDefault(); fitView(); }
   });
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeModal();
-  });
+  // Render
+  (async () => {
+    try {
+      const { svg } = await mermaid.render("m-" + Date.now(), SRC);
+      wrap.innerHTML = svg;
+      // Center on first render
+      requestAnimationFrame(() => fitView());
+    } catch (e) {
+      wrap.innerHTML = '<div class="err">渲染失败：\\n' + (e.message || e) + '</div>';
+    }
+  })();
+<\/script>
+</body>
+</html>`;
 </script>
 </body>
 </html>
