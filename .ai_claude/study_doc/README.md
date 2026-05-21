@@ -12,6 +12,25 @@
 
 详细规约见 [`_meta/doc-conventions.md`](_meta/doc-conventions.md)。
 
+## 怎么阅读（推荐：HTML 版本）
+
+MD 文件在终端 / 普通编辑器里**表格和 mermaid 流程图都显示糟糕**。我们提供配套 HTML：
+
+```bash
+# 在项目根目录运行
+python .ai_claude/study_doc/_meta/gen-html.py
+```
+
+生成的 HTML 在 [`../study_doc_html/`](../study_doc_html/) 目录，**直接双击 `index.html` 用浏览器打开**即可阅读。特性：
+
+- ✅ 表格用 GitHub 样式渲染（不再错位）
+- ✅ Mermaid 代码块**默认显示原始代码**，配 "查看图表" 按钮，点击弹出渲染图
+- ✅ 左侧侧边栏导航所有文档
+- ✅ `[X](other.md)` 链接自动转 `.html`，浏览器内可点击跳转
+- ✅ 需要联网（marked + mermaid 走 CDN）
+
+**编辑 MD 后**：重新跑 `python .ai_claude/study_doc/_meta/gen-html.py` 一行就够。生成的 HTML 跟随 MD 一起提交（小文件、立即可读、跨机方便）。
+
 ## 文档分层
 
 | 层 | 目录 | 我们写的内容 |
