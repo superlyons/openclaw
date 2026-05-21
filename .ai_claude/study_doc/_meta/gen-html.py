@@ -206,12 +206,19 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     background-size: 20px 20px;
   }
   .viewport.dragging { cursor: grabbing; }
+  /* 重要：left/top 都是 0，所有定位靠 JS transform；transform-origin: 0 0 保证 (0,0) 是稳定锚点 */
   .diagram-wrap {
-    position: absolute; left: 50%; top: 50%;
+    position: absolute; left: 0; top: 0;
     transform-origin: 0 0;
     will-change: transform;
   }
-  .diagram-wrap svg { display: block; max-width: none !important; max-height: none !important; height: auto !important; }
+  /* 让 SVG 用自己的 viewBox 像素尺寸，不被 mermaid 的 max-width style 缩小 */
+  .diagram-wrap svg {
+    display: block;
+    max-width: none !important;
+    max-height: none !important;
+    /* 不设 width/auto，让 JS 用 viewBox 显式设置 width/height 像素值 */
+  }
   .err { padding: 20px; color: #cf222e; font-family: monospace; white-space: pre-wrap; }
 </style>
 </head>
@@ -239,42 +246,42 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   const zv = document.getElementById("zv");
 
   let scale = 1, panX = 0, panY = 0;
-  const MIN_SCALE = 0.1, MAX_SCALE = 8;
+  let svgW = 0, svgH = 0;  // natural SVG pixel size (from viewBox)
+  const MIN_SCALE = 0.1, MAX_SCALE = 16;
 
   function update() {
     wrap.style.transform = "translate(" + panX + "px," + panY + "px) scale(" + scale + ")";
     zv.textContent = Math.round(scale * 100) + "%";
   }
 
+  // 缩放：在 viewport 坐标系下，以 (cx, cy) 为锚点缩放，保持该点视觉位置不变
   function zoom(factor, cx, cy) {
     const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * factor));
-    const realFactor = next / scale;
     if (cx === undefined) {
-      // zoom centered on viewport center
-      const rect = vp.getBoundingClientRect();
-      cx = rect.width / 2; cy = rect.height / 2;
+      cx = vp.clientWidth / 2; cy = vp.clientHeight / 2;
     }
-    // keep point (cx,cy in viewport coords) fixed
+    const realFactor = next / scale;
     panX = cx - (cx - panX) * realFactor;
     panY = cy - (cy - panY) * realFactor;
     scale = next;
     update();
   }
 
-  function resetView() { scale = 1; panX = vp.clientWidth / 2; panY = vp.clientHeight / 2; update(); }
+  // 100% 缩放 + 居中
+  function resetView() {
+    scale = 1;
+    panX = (vp.clientWidth - svgW) / 2;
+    panY = (vp.clientHeight - svgH) / 2;
+    update();
+  }
 
+  // 适配：缩放到 90% 视口大小 + 居中
   function fitView() {
-    // Reset transform first to measure natural size
-    const prev = wrap.style.transform;
-    wrap.style.transform = "translate(-50%, -50%) scale(1)";
-    const svg = wrap.querySelector("svg");
-    if (!svg) { wrap.style.transform = prev; return; }
-    const bb = svg.getBoundingClientRect();
-    const vbb = vp.getBoundingClientRect();
-    const fit = Math.min(vbb.width / bb.width, vbb.height / bb.height) * 0.9;
-    scale = fit;
-    panX = vp.clientWidth / 2;
-    panY = vp.clientHeight / 2;
+    if (!svgW || !svgH) return;
+    const vw = vp.clientWidth, vh = vp.clientHeight;
+    scale = Math.min(vw / svgW, vh / svgH) * 0.9;
+    panX = (vw - svgW * scale) / 2;
+    panY = (vh - svgH * scale) / 2;
     update();
   }
 
@@ -310,12 +317,34 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     else if (e.key === "f" || e.key === "F") { e.preventDefault(); fitView(); }
   });
 
+  // 让 SVG 用 viewBox 像素尺寸渲染（mermaid 默认会塞个 max-width 把它压小）
+  function lockSvgToNaturalSize(svgEl) {
+    const vb = svgEl.getAttribute("viewBox");
+    if (!vb) {
+      // 没 viewBox：用当前测量值兜底
+      const r = svgEl.getBoundingClientRect();
+      svgW = r.width; svgH = r.height;
+      return;
+    }
+    const parts = vb.split(/[\\s,]+/).map(parseFloat);
+    if (parts.length !== 4) return;
+    const [, , w, h] = parts;
+    svgW = w; svgH = h;
+    svgEl.setAttribute("width", w);
+    svgEl.setAttribute("height", h);
+    svgEl.removeAttribute("style");  // 干掉 mermaid 注入的 max-width
+    svgEl.style.width = w + "px";
+    svgEl.style.height = h + "px";
+  }
+
   // Render
   (async () => {
     try {
       const { svg } = await mermaid.render("m-" + Date.now(), SRC);
       wrap.innerHTML = svg;
-      // Center on first render
+      const svgEl = wrap.querySelector("svg");
+      if (svgEl) lockSvgToNaturalSize(svgEl);
+      // 首次渲染：适配窗口
       requestAnimationFrame(() => fitView());
     } catch (e) {
       wrap.innerHTML = '<div class="err">渲染失败：\\n' + (e.message || e) + '</div>';
