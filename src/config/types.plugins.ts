@@ -40,8 +40,10 @@ export type PluginEntryConfig = {
 
 export type PluginSlotsConfig = {
   /** Select which plugin owns the memory slot ("none" disables memory plugins). */
+  // lyc: 选择哪个插件拥有该内存槽（“none”表示禁用内存插件）。
   memory?: string;
   /** Select which plugin owns the context-engine slot. */
+  // lyc: 选择哪个插件拥有该上下文引擎槽。
   contextEngine?: string;
 };
 
@@ -50,6 +52,8 @@ export type PluginsLoadConfig = {
   paths?: string[];
 };
 
+/* lyc: PluginInstallRecord 类型 是基于InstallRecordBase修改后的类型
+*/
 export type PluginInstallRecord = Omit<InstallRecordBase, "source"> & {
   source: InstallRecordBase["source"] | "marketplace";
   marketplaceName?: string;

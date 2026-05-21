@@ -13,6 +13,8 @@ interface BackupMaintenanceFs extends BackupRotationFs {
   copyFile: (from: string, to: string) => Promise<void>;
 }
 
+/* lyc: 轮换配置备份, 删除最旧的备份, 重命名旧的备份
+*/
 export async function rotateConfigBackups(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -41,6 +43,7 @@ export async function rotateConfigBackups(
  * (e.g. Windows, some NFS mounts), so we explicitly chmod each backup
  * to owner-only (0o600) to match the main config file.
  */
+// lyc: 600权限代表文件所有者可以读写(r=4, w=2, x=1)
 export async function hardenBackupPermissions(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -69,6 +72,8 @@ export async function hardenBackupPermissions(
  * Only files matching `<configBasename>.bak.*` are considered; the primary
  * `.bak` and numbered `.bak.1` through `.bak.{N-1}` are preserved.
  */
+/* lyc:
+*/
 export async function cleanOrphanBackups(
   configPath: string,
   ioFs: BackupRotationFs,
@@ -149,6 +154,8 @@ export async function createPreUpdateConfigSnapshot(params: {
  * Run the full backup maintenance cycle around config writes.
  * Order matters: rotate ring -> create new .bak -> harden modes -> prune orphan .bak.* files.
  */
+// lyc: 围绕配置写入执行完整的备份维护周期。顺序很重要：轮换配置备份 -> 创建新的 .bak -> 硬化模式 -> 删除孤立的 .bak.* 文件。
+// lyc: 维护配置备份
 export async function maintainConfigBackups(
   configPath: string,
   ioFs: BackupMaintenanceFs,

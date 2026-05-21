@@ -115,6 +115,8 @@ export function resolveUserPath(
   }
   return resolveHomeRelativePath(input, { env, homedir });
 }
+/* lyc:
+*/
 
 export function resolveConfigDir(
   env: NodeJS.ProcessEnv = process.env,

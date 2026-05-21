@@ -159,6 +159,13 @@ function hasMismatchedPersistedBundledPluginRoot(
   );
 }
 
+// lyc:aic v2026.5 新增大量 staleness 检测 helper：
+//   hashExistingFile / resolveRecordPackageJsonPath / hasStalePersistedPluginDiagnostics /
+//   hasStalePersistedPluginMetadata / loadSnapshotInstallRecords /
+//   hasRecoveredInstallRecordsMissingFromPersistedIndex
+// 用于判断 ~/.openclaw/plugins/installs.json 里的快照是否与磁盘真实状态一致。
+// 原来的"派生快照缓存"机制 (resolveDerivedSnapshotCacheKey + derivedSnapshotCache) 整体被删除——
+// 你对它的中文注释已存档到 .ai_claude/orphaned-comments.md。
 function hashExistingFile(filePath: string): string | null {
   try {
     return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -269,6 +276,7 @@ function hasRecoveredInstallRecordsMissingFromPersistedIndex(
   });
 }
 
+// lyc: 加载带有元数据的插件注册表快照
 export function loadPluginRegistrySnapshotWithMetadata(
   params: LoadPluginRegistryParams = {},
 ): PluginRegistrySnapshotResult {
@@ -285,14 +293,25 @@ export function loadPluginRegistrySnapshotWithMetadata(
   }
 
   const env = params.env ?? process.env;
+  // lyc: 初始化诊断数组
   const diagnostics: PluginRegistrySnapshotDiagnostic[] = [];
+  // lyc: 调用者 是否禁用 持久化插件注册表: 是否由调用者禁用 = 偏好使用持久化 插件注册表=false
   const disabledByCaller = params.preferPersisted === false;
+  // lyc: 环境变量 是否禁用 持久化插件注册表: 是否由环境变量禁用 = 禁用持久化 插件注册表(OPENCLAW_DISABLE_PERSISTED_PLUGIN_REGISTRY)=true
   const disabledByEnv = hasEnvFlag(env, DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV);
+  // lyc: 持久化读取功能已启用 = 调用者 和 环境变量 都没有禁用 持久化插件注册表 时为已启用
   const persistedReadsEnabled = !disabledByCaller && !disabledByEnv;
+  // lyc: 持久化安装记录读取功能已启用 = 环境变量 没有禁用 持久化插件注册表 时为已启用
   const persistedInstallRecordReadsEnabled = !disabledByEnv;
+  // lyc:aic v2026.5：原本这里用 resolveDerivedSnapshotCacheKey + derivedSnapshotCache 查内存缓存——
+  //                  整个机制被删除（注释存档在 .ai_claude/orphaned-comments.md）。
   let persistedIndex: InstalledPluginIndex | null = null;
+  // lyc: 如果 持久化安装记录读取功能已启用(persistedInstallRecordReadsEnabled) 即: 环境变量 env.DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV 没有禁用 持久化插件注册表
   if (persistedInstallRecordReadsEnabled) {
+    // lyc: 解析已安装插件索引, 即解析value(~/.openclaw/plugins/installs.json)为 InstalledPluginIndex 类型的实例, 并特别处理 installRecords 属性
     persistedIndex = readPersistedInstalledPluginIndexSync(params);
+    // lyc: 持久化读取功能已启用(调用者和环境变量都没有禁用持久化插件注册表时为true) & 解析已安装插件索引(persistedIndex) 成功
+    // lyc: 对 解析已安装插件索引(persistedIndex) 进行策略、源、绑定件树的校验, 效验成功返回带有元数据的插件注册表快照(其中包含persistedIndex), 否则继续执行
     if (persistedReadsEnabled && persistedIndex) {
       if (
         params.config &&
@@ -300,21 +319,27 @@ export function loadPluginRegistrySnapshotWithMetadata(
       ) {
         diagnostics.push({
           level: "warn",
+          // lyc: 持久化注册表过期策略
           code: "persisted-registry-stale-policy",
+          // lyc: 持久化插件注册表策略与当前配置不匹配；正在使用派生插件索引。请运行`openclaw plugins registry --refresh`以更新持久化注册表
           message:
             "Persisted plugin registry policy does not match current config; using derived plugin index. Run `openclaw plugins registry --refresh` to update the persisted registry.",
         });
       } else if (hasMissingPersistedPluginSource(persistedIndex)) {
         diagnostics.push({
           level: "warn",
+          // lyc: 持久化注册表源已过时
           code: "persisted-registry-stale-source",
+          // lyc: 持久化插件注册表指向缺失的插件文件；正在使用派生插件索引。运行`openclaw plugins registry --refresh`以更新持久化注册表
           message:
             "Persisted plugin registry points at missing plugin files; using derived plugin index. Run `openclaw plugins registry --refresh` to update the persisted registry.",
         });
       } else if (hasMismatchedPersistedBundledPluginRoot(persistedIndex, env)) {
         diagnostics.push({
           level: "warn",
+          // lyc: 持久化注册表源已过时
           code: "persisted-registry-stale-source",
+          // lyc: 持久化插件注册表指向另一个已绑定的插件树；正在使用派生插件索引。请运行“openclaw plugins registry --refresh”来更新持久化注册表。
           message:
             "Persisted plugin registry points at a different bundled plugin tree; using derived plugin index. Run `openclaw plugins registry --refresh` to update the persisted registry.",
         });
@@ -346,6 +371,7 @@ export function loadPluginRegistrySnapshotWithMetadata(
             "Persisted plugin registry is missing recoverable managed npm plugins; using derived plugin index. Run `openclaw plugins registry --refresh` to update the persisted registry.",
         });
       } else {
+        // lyc: 如果 已安装插件索引 策略、源、绑定件树都匹配, 则返回 已安装插件索引
         return {
           snapshot: persistedIndex,
           source: "persisted",
@@ -353,16 +379,23 @@ export function loadPluginRegistrySnapshotWithMetadata(
         };
       }
     } else if (persistedReadsEnabled) {
+      // lyc: 持久化读取功能未启用(调用者或环境变量有一个或全部禁用了持久化插件注册表时为false) 或 解析已安装插件索引失败
       diagnostics.push({
         level: "info",
+        // lyc: 持久化注册表缺失
         code: "persisted-registry-missing",
+        // lyc: 持久化插件注册表缺失或无效；正在使用派生插件索引。
         message: "Persisted plugin registry is missing or invalid; using derived plugin index.",
       });
     }
   } else {
+    // lyc: 持久化安装记录读取功能未启用(persistedInstallRecordReadsEnabled) 即: 环境变量 env.DISABLE_PERSISTED_PLUGIN_REGISTRY_ENV 禁用了 持久化插件注册表
     diagnostics.push({
       level: "warn",
+      // lyc: 持久化注册表已禁用
       code: "persisted-registry-disabled",
+      /* lyc: 
+      */
       message: disabledByEnv
         ? `${formatDeprecatedPersistedRegistryDisableWarning()} Using legacy derived plugin index.`
         : "Persisted plugin registry reads are disabled by the caller; using derived plugin index.",
@@ -372,6 +405,11 @@ export function loadPluginRegistrySnapshotWithMetadata(
   return {
     snapshot: loadInstalledPluginIndex({
       ...params,
+      // lyc:aic v2026.5：installRecords 处理逻辑反转——
+      //   原本：总是显式传 installRecords（caller 优先，否则从 persistedIndex 抽）
+      //   现在：如果"持久化安装记录读取功能已启用"就什么都不传，让 loadInstalledPluginIndex 自己处理；
+      //         否则才显式传 caller 的 installRecords（或空对象兜底）
+      // lyc: 如果入参提供 installRecords 属性, 则优先使用入参提供的安装记录
       ...(persistedInstallRecordReadsEnabled
         ? {}
         : { installRecords: params.installRecords ?? {} }),
@@ -381,10 +419,13 @@ export function loadPluginRegistrySnapshotWithMetadata(
   };
 }
 
+// lyc: 解析插件注册表(PluginRegistry) 的快照(PluginRegistrySnapshot) 并返回解析后的快照; 快照为 InstalledPluginIndex 类型的实例
+// lyc: PluginRegistrySnapshot = InstalledPluginIndex 类型的实例
 function resolveSnapshot(params: LoadPluginRegistryParams = {}): PluginRegistrySnapshot {
   return loadPluginRegistrySnapshotWithMetadata(params).snapshot;
 }
 
+// lyc: 加载插件注册表(PluginRegistry) 的快照(PluginRegistrySnapshot) 快照为 InstalledPluginIndex 类型的实例
 export function loadPluginRegistrySnapshot(
   params: LoadPluginRegistryParams = {},
 ): PluginRegistrySnapshot {

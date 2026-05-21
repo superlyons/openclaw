@@ -43,13 +43,16 @@ function createParsedRoute(params: {
   };
 }
 
+// lyc: 从CLI命令目录(cliCommandCatalog)中筛选出符合路由条件的命令, 这些命令是快速路径命令, 可以直接执行
 export const routedCommands: RouteSpec[] = cliCommandCatalog
+  // lyc: entry是CliCommandCatalogEntry类型, 且有route属性, 且route属性的id值是routedCommandDefinitions变量的key或是CliRoutedCommandId类型的一个值
   .filter(
     (
       entry,
     ): entry is CliCommandCatalogEntry & { route: { id: keyof typeof routedCommandDefinitions } } =>
       Boolean(entry.route),
   )
+  // lyc: 创建统一的路由执行类: match, loadPlugins, canRun, run{routedCommandDefinition.parseArgs & runParsedArgs}
   .map((entry) =>
     createParsedRoute({
       entry,

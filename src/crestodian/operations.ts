@@ -1,3 +1,6 @@
+/* lyc:ai
+
+*/
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import type { ConfigSetOptions } from "../cli/config-set-input.js";
 import type { DoctorOptions } from "../commands/doctor.types.js";
@@ -114,6 +117,8 @@ const ANTHROPIC_API_DEFAULT_MODEL_REF = "anthropic/claude-opus-4-7";
 const CLAUDE_CLI_DEFAULT_MODEL_REF = "claude-cli/claude-opus-4-7";
 const CODEX_APP_SERVER_DEFAULT_MODEL_REF = "openai/gpt-5.5";
 
+/* lyc:ai
+*/
 export function parseCrestodianOperation(input: string): CrestodianOperation {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
@@ -508,6 +513,11 @@ async function resolveTuiAgentId(params: {
   return match?.id ?? requested;
 }
 
+/* lyc:ai
+*/
+
+/* lyc: executeCrestodianOperation函数中处理open-tui操作逻辑(逻辑来自src\crestodian\tui-backend.ts)
+*/
 export async function executeCrestodianOperation(
   operation: CrestodianOperation,
   runtime: RuntimeEnv,

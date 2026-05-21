@@ -34,6 +34,9 @@ function resolveBrewFromPath(pathEnv = process.env.PATH): string | undefined {
   return undefined;
 }
 
+/* lyc: 解析 brew 的路径目录,
+*/
+// lyc:aic v2026.5：参数类型抽成了 BrewResolutionOptions 类型别名（内容相同）
 export function resolveBrewPathDirs(opts?: BrewResolutionOptions): string[] {
   const homeDir = opts?.homeDir ?? os.homedir();
 

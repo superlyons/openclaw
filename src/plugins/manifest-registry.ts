@@ -1,3 +1,7 @@
+/* lyc:aic v2026.5 大重构：清单注册表机制大改（20 个冲突点）。
+ * 你的 112 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/manifest-registry.ts.4.26.lyc-snapshot.ts。
+ * 这是项目里 lyc 注释最密集的文件——对照 snapshot 阅读理解你之前的认知。
+ */
 import fs from "node:fs";
 import path from "node:path";
 import type { OpenClawConfig } from "../config/types.js";

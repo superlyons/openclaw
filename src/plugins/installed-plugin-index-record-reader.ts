@@ -42,6 +42,10 @@ function readRecordMap(value: unknown): Record<string, PluginInstallRecord> | nu
   return records;
 }
 
+// lyc:aic v2026.5 新增大量恢复 helper：
+//   readJsonObjectFileSync / readStringRecord / hasPackagePluginMetadata / readManifestPluginId /
+//   resolveRecoveredManagedNpmPluginId / buildRecoveredManagedNpmInstallRecords / mergeRecoveredManagedNpmInstallRecords
+// 用于在 installs.json 丢失/不完整时，从 npm 安装目录扫 package.json 反推插件安装记录
 function readJsonObjectFileSync(filePath: string): Record<string, unknown> | null {
   const parsed = tryReadJsonSync(filePath);
   return isRecord(parsed) ? parsed : null;
@@ -146,7 +150,11 @@ function mergeRecoveredManagedNpmInstallRecords(
   };
 }
 
+/* lyc: 从已保存的已安装插件索引 (index ~/.openclaw/plugins/installs.json) 中提取插件安装记录 (index.installRecords | index.plugins[].installRecord)
+*/
+// lyc:aic v2026.5：从 export 改为模块私有 function（外部访问改用别的 API）
 function extractPluginInstallRecordsFromPersistedInstalledPluginIndex(
+  // lyc: ~/.openclaw/plugins/installs.json 的 json 对象
   index: unknown,
 ): Record<string, PluginInstallRecord> | null {
   if (!isRecord(index)) {
@@ -178,10 +186,14 @@ export async function readPersistedInstalledPluginIndexInstallRecords(
   return extractPluginInstallRecordsFromPersistedInstalledPluginIndex(parsed);
 }
 
+// lyc: 读取已安装插件索引(~/.openclaw/plugins/installs.json)的安装记录(.installRecords|.plugins[].installRecord)
 export function readPersistedInstalledPluginIndexInstallRecordsSync(
   options: InstalledPluginIndexStoreOptions = {},
 ): Record<string, PluginInstallRecord> | null {
+  // lyc: ~/.openclaw/plugins/installs.json 的 json 对象
+  // lyc:aic v2026.5：readJsonFileSync 改名为 tryReadJsonSync
   const parsed = tryReadJsonSync(resolveInstalledPluginIndexStorePath(options));
+  // lyc: 从已保存的已安装插件索引中提取插件安装记录
   return extractPluginInstallRecordsFromPersistedInstalledPluginIndex(parsed);
 }
 

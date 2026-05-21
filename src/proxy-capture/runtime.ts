@@ -1,3 +1,6 @@
+/* lyc:aic v2026.5 重构（9 个冲突点）。
+ * 你的 31 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/proxy-capture-runtime.4.26.lyc-snapshot.ts。
+ */
 import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 import { normalizeRequestInitHeadersForFetch } from "../infra/fetch-headers.js";

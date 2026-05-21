@@ -1,3 +1,6 @@
+/* lyc:ai
+
+*/
 import {
   listAgentEntries,
   resolveAgentEffectiveModelPrimary,
@@ -138,6 +141,8 @@ function resolveFastTestReferences(env: NodeJS.ProcessEnv): OpenClawReferencePat
   };
 }
 
+/* lyc:ai
+*/
 export async function loadCrestodianOverview(
   opts: { env?: NodeJS.ProcessEnv; deps?: CrestodianOverviewDependencies } = {},
 ): Promise<CrestodianOverview> {
@@ -222,6 +227,7 @@ function formatCommandProbe(probe: LocalCommandProbe): string {
   return probe.error ? `found (${probe.error})` : "found";
 }
 
+// lyc: 以文本方式格式化输出系统概览(loadCrestodianOverview()返回的overview)
 export function formatCrestodianOverview(overview: CrestodianOverview): string {
   const agentLines = overview.agents.map((agent) => {
     const bits = [

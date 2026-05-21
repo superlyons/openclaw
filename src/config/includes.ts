@@ -82,20 +82,27 @@ export class CircularIncludeError extends ConfigIncludeError {
 // ============================================================================
 
 /** Deep merge: arrays concatenate, objects merge recursively, primitives: source wins */
+// lyc: 深度合并两个值返回: 数组拼接 或 对象递归合并 或 原始数据: 取source值
 export function deepMerge(target: unknown, source: unknown): unknown {
+  // lyc: 如果两个都是数组则直接拼接返回
   if (Array.isArray(target) && Array.isArray(source)) {
     return [...target, ...source];
   }
+  // lyc: 如果两个都是纯对象则递归合并
   if (isPlainObject(target) && isPlainObject(source)) {
+    // lyc: 解构赋值, 复制target到result
     const result: Record<string, unknown> = { ...target };
     for (const key of Object.keys(source)) {
       if (isBlockedObjectKey(key)) {
         continue;
       }
+      /* lyc: 
+      */
       result[key] = key in result ? deepMerge(result[key], source[key]) : source[key];
     }
     return result;
   }
+  // lyc: 如果target或source不是纯对象则直接返回source
   return source;
 }
 
@@ -129,17 +136,21 @@ class IncludeProcessor {
   }
 
   process(obj: unknown): unknown {
+    // lyc: 递归处理数组中的每个元素
     if (Array.isArray(obj)) {
       return obj.map((item) => this.process(item));
     }
+    // lyc: 不是数组 && 如果不是纯对象返回
 
     if (!isPlainObject(obj)) {
       return obj;
     }
 
+    // lyc: 不是数组 && 是纯对象 && 如果obj中不存在$include指令
     if (!(INCLUDE_KEY in obj)) {
       return this.processObject(obj);
     }
+    // lyc: 不是数组 && 是纯对象 && obj中存在$include指令
 
     return this.processInclude(obj);
   }
@@ -153,14 +164,19 @@ class IncludeProcessor {
   }
 
   private processInclude(obj: Record<string, unknown>): unknown {
+    // lyc: 返回obj的$include指令对应的值
     const includeValue = obj[INCLUDE_KEY];
+    // lyc: 返回obj中除了$include指令以外的所有键
     const otherKeys = Object.keys(obj).filter((k) => k !== INCLUDE_KEY);
+    // lyc: 解析$include指令对应的值
     const included = this.resolveInclude(includeValue);
 
+    // lyc: 代表obj只有一个属性且这个属性是$include指令, 直接返回解析后的内容(代表整个obj将被$include指令的内容替换)
     if (otherKeys.length === 0) {
       return included;
     }
 
+    // lyc: 如果解析后的内容不是纯对象: 兄弟键要求included后的内容是纯对象
     if (!isPlainObject(included)) {
       throw new ConfigIncludeError(
         "Sibling keys require included content to be an object",
@@ -169,17 +185,24 @@ class IncludeProcessor {
     }
 
     // Merge included content with sibling keys
+    // lyc: 合并included后的内容与其他兄弟键对应的内容
     const rest: Record<string, unknown> = {};
+    // lyc: 递归处理其他兄弟键对应的内容
     for (const key of otherKeys) {
       rest[key] = this.process(obj[key]);
     }
+    // lyc: 合并included后的内容与其他兄弟键对应的内容
     return deepMerge(included, rest);
   }
 
+  // lyc: 解析$include指令对应的值
   private resolveInclude(value: unknown): unknown {
+    // lyc: 如果是字符串则直接加载文件并返回
     if (typeof value === "string") {
       return this.loadFile(value);
     }
+    // lyc: 如果是数组则递归处理数组中的每个元素并合并返回
+    // lyc: 这代表数组中每个include的文件都会得到解析最后把他们合并返回, 如果有相同的键则后面的键会覆盖前面的键
 
     if (Array.isArray(value)) {
       return value.reduce<unknown>((merged, item) => {
@@ -202,17 +225,26 @@ class IncludeProcessor {
   private loadFile(includePath: string): unknown {
     const { resolvedPath, root } = this.resolvePath(includePath);
 
+    // lyc: 检查是否循环引用
     this.checkCircular(resolvedPath);
+    // lyc: 检查是否超过最大深度
     this.checkDepth(includePath);
 
+    // lyc: raw = 读取文件内容
+    // lyc:aic v2026.5：多传一个 root 参数（来自 resolvePath 新返回的 IncludeRoot），用于权限/审计
     const raw = this.readFile(includePath, resolvedPath, root);
+    // lyc: parsed = 解析文件内容为 JSON 对象
     const parsed = this.parseFile(includePath, resolvedPath, raw);
 
     return this.processNested(resolvedPath, parsed);
   }
 
+  // lyc: 解析路径
+  // lyc:aic v2026.5：返回类型从 string 改为 { resolvedPath, root: IncludeRoot }——支持多个允许的 include root（OPENCLAW_INCLUDE_ROOTS）
   private resolvePath(includePath: string): { resolvedPath: string; root: IncludeRoot } {
+    // lyc: 获得配置文件的目录地址
     const configDir = path.dirname(this.basePath);
+    // lyc: resolved = 如果includePath是绝对路径则直接返回, 否则认为includePath是相对路径返回configDir + includePath的路径地址
     const resolved = path.isAbsolute(includePath)
       ? includePath
       : path.resolve(configDir, includePath);
@@ -222,6 +254,8 @@ class IncludeProcessor {
     // roots (CWE-22: Path Traversal). Allowed roots come from
     // OPENCLAW_INCLUDE_ROOTS and let operators opt into shared include trees
     // without weakening the default lock-down.
+    // lyc: 安全检查路径(normalized)是否在配置文件目录(rootDir)下
+    // lyc:aic v2026.5：从单一 rootDir 检查升级为多 root 检查（findContainingRoot 会扫 configRoot + allowedRoots）
     const lexicalMatch = this.findContainingRoot(normalized, "rootDir");
     if (!lexicalMatch) {
       throw new ConfigIncludeError(
@@ -234,6 +268,8 @@ class IncludeProcessor {
     // The realpath may legitimately land in a different allowed root than the
     // lexical path (e.g. config dir contains a symlink into an allowed root),
     // so we recheck across all roots rather than pinning to the lexical match.
+    // lyc: 安全检查路径(normalized)是否在配置文件目录(rootRealDir)下
+    // lyc:aic v2026.5：升级为跨多个 allowed root 重新检查（realpath 可能落到与 lexical 不同的 root）
     try {
       const real = fs.realpathSync(normalized);
       const realMatch = this.findContainingRoot(real, "rootRealDir");
@@ -248,6 +284,8 @@ class IncludeProcessor {
       if (err instanceof ConfigIncludeError) {
         throw err;
       }
+      // lyc: 如果文件不存在, 则直接返回 normalized 路径（lexical 检查已经足够）
+      // lyc:aic v2026.5：除了 ENOENT 之外的 realpath 错误现在会抛 ConfigIncludeError（不再被静默吞）
       if (isNotFoundError(err)) {
         // File doesn't exist yet - lexical containment check above is sufficient.
         return { resolvedPath: normalized, root: lexicalMatch };
@@ -326,6 +364,7 @@ class IncludeProcessor {
     }
   }
 
+  // lyc: 解析嵌套的include键对应的值
   private processNested(resolvedPath: string, parsed: unknown): unknown {
     const nested = new IncludeProcessor(
       resolvedPath,
@@ -347,6 +386,7 @@ function safeRealpath(target: string): string {
   }
 }
 
+// lyc:aic v2026.5 新增：判断错误是不是 ENOENT（用于上面 resolvePath 区分"文件不存在"与其他 realpath 错误）
 function isNotFoundError(error: unknown): boolean {
   return Boolean(
     error &&
@@ -356,6 +396,7 @@ function isNotFoundError(error: unknown): boolean {
   );
 }
 
+// lyc: 以带保护机制(防止逃离配置目录)的方式读取配置中的 include 文件
 export function readConfigIncludeFileWithGuards(params: IncludeFileReadParams): string {
   const ioFs = params.ioFs ?? fs;
   const maxBytes = params.maxBytes ?? MAX_INCLUDE_FILE_BYTES;
@@ -407,6 +448,7 @@ const defaultResolver: IncludeResolver = {
 /**
  * Resolves all $include directives in a parsed config object.
  */
+// lyc: 解析已解析配置对象中的所有$include指令(directives)。
 export function resolveConfigIncludes(
   obj: unknown,
   configPath: string,

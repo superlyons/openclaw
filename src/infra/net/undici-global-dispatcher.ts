@@ -152,6 +152,10 @@ function resolveDispatcherKey(params: {
   return `${params.kind}:${params.timeoutMs}:${autoSelectToken}`;
 }
 
+// lyc:aic v2026.5 新增 3 个 helper：
+//   resolveEnvProxyDispatcherOptions   — 合并 env 代理 + HTTP1-only 选项
+//   resolveEnvProxyBootstrapKey        — 把 options 序列化成稳定的指纹 key，用于幂等创建
+//   resolveStreamTimeoutMs             — 把 opts.timeoutMs 卡到 DEFAULT_UNDICI_STREAM_TIMEOUT_MS 以下
 function resolveEnvProxyDispatcherOptions(): ConstructorParameters<
   UndiciGlobalDispatcherDeps["EnvHttpProxyAgent"]
 >[0] {
@@ -178,6 +182,9 @@ function resolveStreamTimeoutMs(opts?: { timeoutMs?: number }): number | null {
   return Math.max(DEFAULT_UNDICI_STREAM_TIMEOUT_MS, Math.floor(timeoutMsRaw));
 }
 
+// lyc: 获取当前 undici 的全局 dispatcher 分发器 的 kind
+// lyc:aic v2026.5 拆分：现在 resolveCurrentDispatcherKind 只是从下面的 resolveCurrentDispatcherInfo 里取 kind 字段，
+//                  实际逻辑搬到 resolveCurrentDispatcherInfo（返回完整 info 对象）
 function resolveCurrentDispatcherKind(
   runtime: Pick<UndiciGlobalDispatcherDeps, "getGlobalDispatcher">,
 ): SupportedDispatcherKind | null {
@@ -204,32 +211,54 @@ function resolveCurrentDispatcherInfo(
   };
 }
 
+/* lyc: 确保全局undici dispatcher 分发器是基于环境变量配置的代理
+#  分发器(Dispatcher): 是undici库中的核心概念，它是一个负责处理HTTP请求的组件
+## 分发器类型:
+## EnvHttpProxyAgent
+  // 这时开始检查环境变量,存在HTTPS_PROXY则使用setGlobalDispatcher(new EnvHttpProxyAgent())设置全局 dispatcher 分发器
+  // 这些请求不会走代理
+  // 这个会走代理, 请求通过代理服务器转发：client → proxy(http://corporate-proxy:8080) → https://external-service.com
+*/
 export function ensureGlobalUndiciEnvProxyDispatcher(): void {
+  // lyc: 检查环境变量中是否配置了HTTP/S代理
   const shouldUseEnvProxy = hasEnvHttpProxyAgentConfigured();
   if (!shouldUseEnvProxy) {
     return;
   }
+  // lyc:aic v2026.5 大改：
+  //   1. lastAppliedProxyBootstrap (bool) 改为 lastAppliedProxyBootstrapKey (string|null) —— 支持指纹比对，proxy 选项变了能识别
+  //   2. 新增 "proxyline-managed" kind 处理（如果分发器已被 proxyline 管理则不动）
+  //   3. setGlobalDispatcher 改为 createHttp1EnvHttpProxyAgent 工厂（封装了 HTTP1-only + TLS 选项）
   const runtime = loadUndiciGlobalDispatcherDeps();
   const { setGlobalDispatcher } = runtime;
   const proxyOptions = resolveEnvProxyDispatcherOptions();
   const nextBootstrapKey = resolveEnvProxyBootstrapKey(proxyOptions);
+  // lyc: 检查当前 undici 的全局 dispatcher 分发器的 kind
   const currentKind = resolveCurrentDispatcherKind(runtime);
+  // lyc: 代表不支持, 直接返回
   if (currentKind === null) {
     return;
   }
+  // lyc:aic v2026.5 新增：如果分发器已被 proxyline 管理，记录 key 并返回
   if (currentKind === "proxyline-managed") {
     lastAppliedProxyBootstrapKey = nextBootstrapKey;
     return;
   }
+  // lyc: 如果分发器 kind 是 env-proxy 且本次还没有 bootstrap key，记录并返回
   if (currentKind === "env-proxy" && lastAppliedProxyBootstrapKey === null) {
     lastAppliedProxyBootstrapKey = nextBootstrapKey;
     return;
   }
+  // lyc:aic v2026.5：如果分发器已是 env-proxy 且 proxy 选项指纹相同，则什么都不用做
   if (currentKind === "env-proxy" && lastAppliedProxyBootstrapKey === nextBootstrapKey) {
     return;
   }
   try {
+    /* lyc: 设置 undici 的全局 dispatcher 分发器为 EnvHttpProxyAgent (基于 env-proxy) 实例
+    */
+    // lyc:aic v2026.5：用 createHttp1EnvHttpProxyAgent 工厂（强制 HTTP1-only + TLS 选项）替代原 new EnvHttpProxyAgent
     setGlobalDispatcher(createHttp1EnvHttpProxyAgent(proxyOptions));
+    // lyc: 标记为已应用代理引导
     lastAppliedProxyBootstrapKey = nextBootstrapKey;
   } catch {
     // Best-effort bootstrap only.

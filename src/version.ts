@@ -104,6 +104,8 @@ export function resolveUsableRuntimeVersion(version: string | undefined): string
   return trimmed;
 }
 
+/* lyc: 从环境变量和运行时版本(params.runtimeVersion)中解析版本
+*/
 function resolveVersionFromRuntimeSources(params: {
   env: RuntimeVersionEnv;
   runtimeVersion: string | undefined;
@@ -135,18 +137,24 @@ export function resolveRuntimeServiceVersion(
   });
 }
 
+// lyc: 解析openclaw版本, 解析兼容性主机版本
 export function resolveCompatibilityHostVersion(
   env: RuntimeVersionEnv = process.env as RuntimeVersionEnv,
   fallback = RUNTIME_SERVICE_VERSION_FALLBACK,
 ): string {
+  // lyc: 如果env.OPENCLAW_COMPATIBILITY_HOST_VERSION(OPENCLAW兼容性主机版本)存在, 则返回该值
   const explicitCompatibilityVersion = firstNonEmpty(env.OPENCLAW_COMPATIBILITY_HOST_VERSION);
   if (explicitCompatibilityVersion) {
     return explicitCompatibilityVersion;
   }
+  // lyc: 从环境变量和运行时版本(params.runtimeVersion)中解析版本
   return resolveVersionFromRuntimeSources({
     env,
+    // lyc: openclaw版本, 如果不存在或值是"0.0.0.0", 则返回unknown
     runtimeVersion: resolveUsableRuntimeVersion(VERSION),
+    // lyc: 默认值为unknown
     fallback,
+    // lyc: 偏好: 如果入参env是process.env, 则返回runtime-first, 否则返回env-first
     preference: env === (process.env as RuntimeVersionEnv) ? "runtime-first" : "env-first",
   });
 }
@@ -154,6 +162,10 @@ export function resolveCompatibilityHostVersion(
 // Single source of truth for the current OpenClaw version.
 // - Embedded/bundled builds: injected define or env var.
 // - Dev/npm builds: package.json.
+/* lyc: 当前OpenClaw版本的唯一权威信息来源: 
+*/
+/* lyc: 
+ */
 export const VERSION = resolveBinaryVersion({
   moduleUrl: import.meta.url,
   injectedVersion: typeof __OPENCLAW_VERSION__ === "string" ? __OPENCLAW_VERSION__ : undefined,

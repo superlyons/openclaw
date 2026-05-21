@@ -660,6 +660,8 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     localBtwRunIds.clear();
   };
 
+  /* lyc: const client: TuiBackend = CrestodianTuiBackend | GatewayChatClient | EmbeddedTuiBackend
+  */
   const client: TuiBackend = opts.backend
     ? opts.backend
     : opts.local
@@ -1186,6 +1188,7 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
   };
   exitAwareClient.setRequestExitHandler?.(() => requestExit());
 
+  // lyc: handleCommand和sendMessage函数内部调用了client.sendChat(TuiBackend::sendChat()接口)
   const { handleCommand, sendMessage, openModelSelector, openAgentSelector, openSessionSelector } =
     createCommandHandlers({
       client,
@@ -1219,12 +1222,15 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     closeOverlay,
   });
   updateAutocompleteProvider();
+  // lyc:aic v2026.5 新增：canSubmitChatMessage 守卫 + notifyBlockedChatSubmit
+  //         防止用户在 agent 还在跑时连续发消息（必须先 Esc 中止）
   const canSubmitChatMessage = () =>
     !state.activeChatRunId && !state.pendingChatRunId && !state.pendingOptimisticUserMessage;
   const notifyBlockedChatSubmit = () => {
     chatLog.addSystem("agent is busy — press Esc to abort before sending a new message");
     tui.requestRender();
   };
+  // lyc: submitHander 闭包函数通过 handleCommand, sendMessage 函数间接调用了 client.sendChat (TuiBackend::sendChat() 接口)
   const submitHandler = createEditorSubmitHandler({
     editor,
     handleCommand,
@@ -1233,6 +1239,7 @@ export async function runTui(opts: RunTuiOptions): Promise<TuiResult> {
     canSubmitMessage: canSubmitChatMessage,
     onBlockedMessageSubmit: notifyBlockedChatSubmit,
   });
+  // lyc: onSubmit事件触发时, 会间接调用了client.sendChat(TuiBackend::sendChat()接口)
   editor.onSubmit = createSubmitBurstCoalescer({
     submit: submitHandler,
     enabled: shouldEnableWindowsGitBashPasteFallback(),

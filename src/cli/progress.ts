@@ -1,3 +1,7 @@
+/* lyc:ai
+
+
+*/
 import { spinner } from "@clack/prompts";
 import { createOscProgressController, supportsOscProgress } from "../terminal/osc-progress.js";
 import {

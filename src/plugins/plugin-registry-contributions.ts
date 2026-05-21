@@ -266,6 +266,9 @@ function filterContributionOwnerIds(params: {
   return sortUnique(params.owners.filter((owner) => enabledPluginIds.has(owner)));
 }
 
+// lyc:aic v2026.5 新增：canReuseCurrentManifestRegistry + loadCurrentManifestRegistryForPluginRegistry
+//         这两个 helper 让 loadPluginManifestRegistryForPluginRegistry 可以在"参数全是默认值"时
+//         复用已经计算过的 PluginMetadataSnapshot，避免重复加载
 function canReuseCurrentManifestRegistry(params: LoadPluginRegistryManifestParams): boolean {
   return (
     params.bundledChannelConfigCollector === undefined &&
@@ -316,6 +319,7 @@ function loadCurrentManifestRegistryForPluginRegistry(
   };
 }
 
+// lyc: 为 插件注册表 (PluginRegistry) 加载 插件清单注册表 (PluginManifestRegistry)
 export function loadPluginManifestRegistryForPluginRegistry(
   params: LoadPluginRegistryManifestParams = {},
 ): PluginManifestRegistry {

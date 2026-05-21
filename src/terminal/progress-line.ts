@@ -7,6 +7,7 @@ export function registerActiveProgressLine(stream: NodeJS.WriteStream): void {
   activeStream = stream;
 }
 
+// lyc: 清除当前活动的进度行
 export function clearActiveProgressLine(): void {
   if (!activeStream?.isTTY) {
     return;

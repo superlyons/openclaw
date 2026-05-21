@@ -52,6 +52,8 @@ async function findPackageRoot(startDir: string, maxDepth = 12): Promise<string 
   return null;
 }
 
+// lyc: 查找 根package.json 所在的目录
+// lyc: 从startDir开始向上遍历目录，查找第一个包含package.json的目录，这个package.json必须有name字段，且name字段的值在CORE_PACKAGE_NAMES中，则返回这个目录，否则返回null
 function findPackageRootSync(startDir: string, maxDepth = 12): string | null {
   for (const current of iterAncestorDirs(startDir, maxDepth)) {
     const name = readPackageNameSync(current);
@@ -74,6 +76,8 @@ function* iterAncestorDirs(startDir: string, maxDepth: number): Generator<string
   }
 }
 
+/* lyc: 从argv1中提取候选目录, argv1为process.argv[1]的值,  node myscript.js arg1 arg2 -> process.argv[1] = /path/to/mycript.js
+*/
 function candidateDirsFromArgv1(argv1: string): string[] {
   const cacheKey = path.resolve(argv1);
   const cached = argv1CandidateCache.get(cacheKey);
@@ -81,11 +85,15 @@ function candidateDirsFromArgv1(argv1: string): string[] {
     return [...cached];
   }
   const normalized = path.resolve(argv1);
+  // lyc: /path/to/node_modules/.bin
   const candidates = [path.dirname(normalized)];
 
   // Resolve symlinks for version managers (nvm, fnm, n, Homebrew/Linuxbrew)
   // that create symlinks in bin/ pointing to the real package location.
+  // lyc: 为版本管理器（nvm、fnm、n、Homebrew/Linuxbrew）解析符号链接，这些管理器会在bin/目录中创建指向实际包位置的符号链接。
   try {
+    // lyc: 设argv1的"/path/to/node_modules/.bin/openclaw"是一个符号链接，resolved为解析后的实际包位置
+    // lyc: 因此添加到候选目录中candidates
     const resolved = openClawRootFsSync.realpathSync(normalized);
     if (resolved !== normalized) {
       candidates.push(path.dirname(resolved));
@@ -96,9 +104,13 @@ function candidateDirsFromArgv1(argv1: string): string[] {
 
   const parts = normalized.split(path.sep);
   const binIndex = parts.lastIndexOf(".bin");
+  // lyc: argv1的"/path/to/node_modules/.bin/app/agent/openclaw"是运行在"../node_modules/.bin/..."目录下的
   if (binIndex > 0 && parts[binIndex - 1] === "node_modules") {
+    // lyc: binName = openclaw
     const binName = path.basename(normalized);
+    // lyc: nodeModulesDir = /path/to/node_modules/.bin
     const nodeModulesDir = parts.slice(0, binIndex).join(path.sep);
+    // lyc: /path/to/node_modules/.bin/openclaw
     candidates.push(path.join(nodeModulesDir, binName));
   }
   const deduped = dedupeCandidates(candidates);
@@ -128,6 +140,7 @@ export async function resolveOpenClawPackageRoot(opts: {
   return null;
 }
 
+// lyc: 从argv1、moduleUrl、cwd中提取候选目录, 并在候选目录中向上查找 根package.json 所在的目录, 找到返回这个目录, 否则返回null
 export function resolveOpenClawPackageRootSync(opts: {
   cwd?: string;
   argv1?: string;
@@ -150,6 +163,7 @@ export function resolveOpenClawPackageRootSync(opts: {
   return null;
 }
 
+// lyc: 从argv1、moduleUrl、cwd中提取候选目录
 function buildCandidates(opts: { cwd?: string; argv1?: string; moduleUrl?: string }): string[] {
   const candidates: string[] = [];
 

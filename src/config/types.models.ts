@@ -7,6 +7,7 @@ import type { AgentRuntimePolicyConfig } from "./types.agents-shared.js";
 import type { ConfiguredModelProviderRequest } from "./types.provider-request.js";
 import type { SecretInput } from "./types.secrets.js";
 
+// lyc: LLM大模型的API名称列表, 
 export const MODEL_APIS = [
   "openai-completions",
   "openai-responses",

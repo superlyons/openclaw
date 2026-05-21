@@ -28,6 +28,7 @@ function resolveDefaultHomeDir(): string {
 }
 
 /** Build a homedir thunk that respects OPENCLAW_HOME for the given env. */
+// lyc: 返回一个函数, 该函数返回当前环境的 home 目录路径, 尊重 OPENCLAW_HOME 环境变量
 function envHomedir(env: NodeJS.ProcessEnv): () => string {
   return () => resolveRequiredHomeDir(env, os.homedir);
 }
@@ -57,15 +58,19 @@ export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir
  * Can be overridden via OPENCLAW_STATE_DIR.
  * Default: ~/.openclaw
  */
+/* lyc:
+*/
 export function resolveStateDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
 ): string {
+  // lyc: 获得有效的HOME路径
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
   const override = env.OPENCLAW_STATE_DIR?.trim();
   if (override) {
     return resolveUserPath(override, env, effectiveHomedir);
   }
+  // lyc: effectiveHomedir函数返回的路径+"/.openclaw"目录地址
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
     return newDir;
@@ -88,6 +93,8 @@ export function resolveStateDir(
   return newDir;
 }
 
+/* lyc:
+*/
 function resolveUserPath(
   input: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -158,6 +165,8 @@ export function resolveCanonicalConfigPath(
  * Resolve the active config path by preferring existing config candidates
  * before falling back to the canonical path.
  */
+/* lyc:
+*/
 export function resolveConfigPathCandidate(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
@@ -182,6 +191,8 @@ export function resolveConfigPathCandidate(
 /**
  * Active config path (prefers existing config files).
  */
+/* lyc:
+*/
 export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   stateDir: string = resolveStateDir(env, envHomedir(env)),
@@ -192,6 +203,8 @@ export function resolveConfigPath(
     return resolveUserPath(override, env, homedir);
   }
   if (env.OPENCLAW_TEST_FAST === "1") {
+    // lyc:如果配置OPENCLAW_TEST_FAST=1, 则直接返回
+    // lyc: stateDir函数返回的路径+"/openclaw.json"文件地址
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const stateOverride = env.OPENCLAW_STATE_DIR?.trim();
@@ -213,6 +226,7 @@ export function resolveConfigPath(
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const defaultStateDir = resolveStateDir(env, homedir);
+  // lyc: 如果 stateDir === defaultStateDir, 
   if (path.resolve(stateDir) === path.resolve(defaultStateDir)) {
     return resolveConfigPathCandidate(env, homedir);
   }
@@ -225,11 +239,14 @@ export const CONFIG_PATH = resolveConfigPathCandidate();
  * Resolve default config path candidates across default locations.
  * Order: explicit config path → state-dir-derived paths → new default.
  */
+/** lyc:
+*/
 export function resolveDefaultConfigCandidates(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
 ): string[] {
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
+  // lyc: openclaw.json的显式配置路径(OPENCLAW_CONFIG_PATH)
   const explicit = env.OPENCLAW_CONFIG_PATH?.trim();
   if (explicit) {
     return [resolveUserPath(explicit, env, effectiveHomedir)];

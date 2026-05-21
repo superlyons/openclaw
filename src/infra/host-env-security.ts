@@ -92,15 +92,19 @@ export function normalizeHostOverrideEnvVarKey(rawKey: string): string | null {
   return null;
 }
 
+/* lyc: 检查环境变量名称是否危险
+*/
 export function isDangerousHostEnvVarName(rawKey: string): boolean {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {
     return false;
   }
   const upper = key.toUpperCase();
+  // lyc: src\infra\host-env-security-policy.json.blockedEverywhereKeys 是否包含upper
   if (HOST_DANGEROUS_ENV_KEYS.has(upper)) {
     return true;
   }
+  // lyc: src\infra\host-env-security-policy.json.blockedPrefixes 是否包含upper
   return HOST_DANGEROUS_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 
@@ -116,15 +120,19 @@ export function isDangerousHostInheritedEnvVarName(rawKey: string): boolean {
   return HOST_DANGEROUS_INHERITED_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 
+/* lyc: 检查环境变量名称是否危险, 包含overrideKeys
+*/
 export function isDangerousHostEnvOverrideVarName(rawKey: string): boolean {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {
     return false;
   }
   const upper = key.toUpperCase();
+  // lyc: src\infra\host-env-security-policy.json.blockedOverrideKeys 是否包含upper
   if (HOST_DANGEROUS_OVERRIDE_ENV_KEYS.has(upper)) {
     return true;
   }
+  // lyc: src\infra\host-env-security-policy.json.blockedOverridePrefixes 是否包含upper
   return HOST_DANGEROUS_OVERRIDE_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 

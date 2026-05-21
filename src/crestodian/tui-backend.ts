@@ -1,3 +1,5 @@
+/* lyc:ai
+*/
 import { randomUUID } from "node:crypto";
 import type { SessionsPatchParams, SessionsPatchResult } from "../gateway/protocol/index.js";
 import { buildAgentMainSessionKey } from "../routing/session-key.js";
@@ -126,6 +128,7 @@ class CrestodianTuiBackend implements TuiBackend {
     // The enclosing TUI owns terminal shutdown; Crestodian has no transport to close.
   }
 
+  // lyc: 发送聊天消息
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
     const runId = opts.runId ?? randomUUID();
     const text = opts.message.trim();
@@ -265,6 +268,7 @@ class CrestodianTuiBackend implements TuiBackend {
     });
   }
 
+  // lyc: 处理回复
   private async respond(runId: string, sessionKey: string, text: string): Promise<void> {
     try {
       const reply = await this.resolveReply(text);
@@ -274,7 +278,9 @@ class CrestodianTuiBackend implements TuiBackend {
     }
   }
 
+  // lyc: 解析回复并执行操作, 最后返回结果文本
   private async resolveReply(text: string): Promise<string> {
+    // lyc: 若有pending操作, 则先确认用户是否允许执行
     if (this.pending) {
       if (isYes(text)) {
         const pending = this.pending;
@@ -291,14 +297,20 @@ class CrestodianTuiBackend implements TuiBackend {
     }
 
     const capture = createCaptureRuntime();
+    // lyc: 解析用户意图返回明确的操作
     const operation = await resolveCrestodianOperation(text, capture, this.opts);
 
+    // lyc: 若操作是open-tui, 设置handoff=open-tui操作 并退出CrestodianTUI(即当前TUI CrestodianTui)
+    // 如果是在runCrestodianTui调用上下文中, 则会切换到用户的AgentTUI(handoff), 在AgentTUI中通过"/crestodian"还能返回CrestodianTUI
     if (operation.kind === "open-tui") {
       this.handoff = operation;
+      // lyc: 请求退出CrestodianTUI(即当前TUI CrestodianTui), 在如果是在runCrestodianTui调用上下文中runTui()会返回
       queueMicrotask(() => this.requestExit?.());
+      // lyc: 即将打开你的常规代理TUI。在那里使用/crestodian来返回。
       return "Opening your normal agent TUI. Use /crestodian there to come back.";
     }
 
+    // lyc: 若操作是持久性的(config-set/model切换等), 即涉及到系统配置的改变, 暂存到pending，询问用户确认
     if (isPersistentCrestodianOperation(operation) && !this.opts.yes) {
       this.pending = operation;
       await executeCrestodianOperation(operation, capture, {
@@ -308,10 +320,13 @@ class CrestodianTuiBackend implements TuiBackend {
       return [capture.read(), approvalQuestion(operation)].filter(Boolean).join("\n\n");
     }
 
+    // lyc: 若操作不是持久性的, 则直接执行
     await executeCrestodianOperation(operation, capture, {
       approved: this.opts.yes === true || !isPersistentCrestodianOperation(operation),
       deps: this.opts.deps,
     });
+
+    // lyc: 获取执行结果文本
     const reply = capture.read();
     if (operation.kind === "none" && reply.includes("Bye.")) {
       queueMicrotask(() => this.requestExit?.());
@@ -320,6 +335,9 @@ class CrestodianTuiBackend implements TuiBackend {
   }
 }
 
+/* lyc:ai CrestodianTUI入口函数
+
+*/
 export async function runCrestodianTui(
   opts: CrestodianTuiOptions,
   runtime: RuntimeEnv,
@@ -329,6 +347,7 @@ export async function runCrestodianTui(
     const overview = await loadOverviewForTui(opts);
     const backend = new CrestodianTuiBackend(opts, formatCrestodianStartupMessage(overview));
     const runTui = opts.runTui ?? defaultRunTui;
+    // lyc: 启动TUI, 使用CrestodianTuiBackend作为backend, 即由谁来处理用户输入和输出
     await runTui({
       local: true,
       session: CRESTODIAN_SESSION_KEY,
@@ -343,11 +362,16 @@ export async function runCrestodianTui(
     if (!handoff) {
       return;
     }
+    /* lyc: 执行handoff操作, 在当前上下文中一定是open-tui操作, 内部会调用第二个 runTui 来启动AgentTUI
+    */
     const result = await executeCrestodianOperation(handoff, runtime, {
       approved: true,
       deps: opts.deps,
     });
+    // lyc: 用户在 AgentTUI 中输入 /crestodian fix gateway 后会推出AgentTUI, result = {applied: false, nextInput: "fix gateway"}
     nextInput = result.nextInput;
+    // lyc: 若handoff操作没有传递下一条用户消息, 则直接退出, 
+    // lyc: 否则继续循环, 进入CrestodianTui界面处理下一条用户消息
     if (!nextInput?.trim()) {
       return;
     }

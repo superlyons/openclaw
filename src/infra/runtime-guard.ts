@@ -21,6 +21,7 @@ export type RuntimeDetails = {
 
 const SEMVER_RE = /(\d+)\.(\d+)\.(\d+)/;
 
+// lyc: 解析 Semver(语义化版本号版本号的定义规范和规则) 版本字符串, Major主版本, Minor次版本, Patch修订版本
 export function parseSemver(version: string | null): Semver | null {
   if (!version) {
     return null;
@@ -50,7 +51,11 @@ export function isAtLeast(version: Semver | null, minimum: Semver): boolean {
   return version.patch >= minimum.patch;
 }
 
+// lyc: 检测当前运行时环境
 export function detectRuntime(): RuntimeDetails {
+  /* lyc:
+    // ... 更多依赖
+  */
   const kind: RuntimeKind = process.versions?.node ? "node" : "unknown";
   const version = process.versions?.node ?? null;
 
@@ -62,8 +67,10 @@ export function detectRuntime(): RuntimeDetails {
   };
 }
 
+// lyc: 检查运行时是否受支持
 export function runtimeSatisfies(details: RuntimeDetails): boolean {
   const parsed = parseSemver(details.version);
+  // lyc: 如果是node环境则检查版本号是否大于等于22.14.0
   if (details.kind === "node") {
     return isAtLeast(parsed, MIN_NODE);
   }
@@ -96,10 +103,12 @@ export function nodeVersionSatisfiesEngine(
   return isAtLeast(parseSemver(version), minimum);
 }
 
+// lyc: 断言运行时是否受支持
 export function assertSupportedRuntime(
   runtime: RuntimeEnv = defaultRuntime,
   details: RuntimeDetails = detectRuntime(),
 ): void {
+  // lyc: 如果是node环境且版本号大于等于22.14.0, 则返回成功
   if (runtimeSatisfies(details)) {
     return;
   }

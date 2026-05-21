@@ -1,3 +1,13 @@
+/* lyc:aic v2026.5 大重构：本文件相比 4.26 增删了大量函数，签名也有变化。
+ * 你的 37 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/bundled-dir.4.26.lyc-snapshot.ts。
+ * 主要变化：
+ *   - 新增 isTruthyEnvValue / shouldTrustTestBundledPluginsDirOverride / safeRealpathSync /
+ *     pathContains / trustedBundledPluginRootsForPackageRoot / resolvePackageRootsForBundledPlugins /
+ *     resolveSourceCheckoutDependencyDiagnostic / resolveTrustedExistingOverride /
+ *     overrideResolvesUnderPackageBundledRoot 等
+ *   - 删除 runningSourceTypeScriptProcess
+ *   - resolveBundledDirFromPackageRoot 去掉了 preferSourceCheckout 参数（改为内部判断）
+ */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

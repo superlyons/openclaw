@@ -17,6 +17,7 @@ export function canSkipGatewayConfigLoad(params: {
   );
 }
 
+// lyc: 检查是否是cron命令, 是直接返回true
 export function isGatewayConfigBypassCommandPath(commandPath: readonly string[]): boolean {
   return commandPath[0] === "cron";
 }

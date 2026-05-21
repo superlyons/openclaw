@@ -243,3 +243,6 @@ extensions/**/.openclaw-runtime-deps-stamp.json
 /.opengrep-out/
 /.crabbox-artifacts
 .comux*
+
+# 你自己加的：忽略合并冲突备份文件
+**.*bk.ts

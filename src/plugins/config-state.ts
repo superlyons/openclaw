@@ -39,6 +39,8 @@ const BUILT_IN_PLUGIN_ALIAS_FALLBACKS: ReadonlyArray<readonly [alias: string, pl
   ["minimax-portal", "minimax"],
   ["minimax-portal-auth", "minimax"],
 ] as const;
+/* lyc:
+*/
 const BUILT_IN_PLUGIN_ALIAS_LOOKUP = new Map<string, string>([
   ...BUILT_IN_PLUGIN_ALIAS_FALLBACKS,
   ...BUILT_IN_PLUGIN_ALIAS_FALLBACKS.map(([, pluginId]) => [pluginId, pluginId] as const),
@@ -58,6 +60,8 @@ function normalizePluginIdWithLookup(
 ): string {
   const trimmed = normalizeOptionalString(id) ?? "";
   const normalized = normalizeOptionalLowercaseString(trimmed) ?? "";
+  // lyc: id是内建插件别名: openai-codex, google-gemini-cli, minimax-portal, minimax-portal-auth, openai, google, minimax
+  // lyc: 则返回对应pluginId: openai, google, minimax
   const builtInAlias = BUILT_IN_PLUGIN_ALIAS_LOOKUP.get(normalized);
   if (builtInAlias) {
     return builtInAlias;

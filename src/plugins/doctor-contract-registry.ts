@@ -48,12 +48,16 @@ const moduleLoaders: PluginModuleLoaderCache = createPluginModuleLoaderCache();
 let moduleLoaderFactoryForTest: PluginModuleLoaderFactory | undefined;
 
 function loadPluginDoctorContractModule(modulePath: string): PluginDoctorContractModule {
+  // lyc:aic v2026.5：模块加载从"原生 require 失败再 jiti"改为统一的 getCachedPluginModuleLoader（带缓存）
   return getCachedPluginModuleLoader({
     cache: moduleLoaders,
     modulePath,
     importerUrl: import.meta.url,
     ...(moduleLoaderFactoryForTest ? { createLoader: moduleLoaderFactoryForTest } : {}),
   })(modulePath) as PluginDoctorContractModule;
+// lyc:aic v2026.5：以下 3 个 helper 被整体删除（buildDoctorContractCacheKey / buildDoctorContractBaseCacheKey /
+//                  resolveDoctorContractBaseCachePayload）。Doctor 合同缓存机制改为基于函数级缓存（见 createDoctorContractsLoaderCache 等）。
+//                  你的中文注释（关于这 3 个 helper 的描述）在 git 历史中可查（提交 ${branch HEAD}）。
 }
 
 function resolveContractApiPath(rootDir: string): string | null {
@@ -155,6 +159,8 @@ function hasLegacyElevenLabsTalkFields(raw: unknown): boolean {
   );
 }
 
+/* lyc: 计算所有可能的插件ID，从raw配置的channels, plugins.entries 和 talk中提取
+*/
 export function collectRelevantDoctorPluginIds(raw: unknown): string[] {
   const ids = new Set<string>();
   const root = asNullableRecord(raw);
@@ -257,6 +263,7 @@ function loadPluginDoctorContractEntry(
   };
 }
 
+// lyc: 解析插件的Doctor合同, 并返回解析后的 Doctor合同对象列表
 function resolvePluginDoctorContracts(params?: {
   config?: OpenClawConfig;
   workspaceDir?: string;
@@ -264,10 +271,13 @@ function resolvePluginDoctorContracts(params?: {
   pluginIds?: readonly string[];
 }): PluginDoctorContractEntry[] {
   const env = params?.env ?? process.env;
+  // lyc:aic v2026.5：原本这里有 baseCacheKey/cacheKey + doctorContractCache 查缓存的逻辑——
+  //                  整套机制被替换为更内化的缓存（在下方 moduleLoaders 等内部 cache 里）。
   if (params?.pluginIds && params.pluginIds.length === 0) {
     return [];
   }
 
+  // lyc: 为 插件注册表(PluginRegistry) 加载 插件清单注册表(manifestRegistry:PluginManifestRegistry)
   const manifestRegistry = loadPluginManifestRegistryForPluginRegistry({
     config: params?.config,
     workspaceDir: params?.workspaceDir,
@@ -278,6 +288,7 @@ function resolvePluginDoctorContracts(params?: {
   const entries: PluginDoctorContractEntry[] = [];
   const scopedPluginIds = params?.pluginIds ? new Set(params.pluginIds) : null;
   for (const record of manifestRegistry.plugins) {
+    // lyc: 如果入参指定了 pluginIds 列表, 且当前插件(record.id), 或其渠道(channelId) 或其提供者(providerId) 都不在 pluginIds 列表中, 则跳过当前插件
     if (
       scopedPluginIds &&
       !scopedPluginIds.has(record.id) &&
@@ -286,11 +297,16 @@ function resolvePluginDoctorContracts(params?: {
     ) {
       continue;
     }
+    // lyc: 加载当前插件的 Doctor 合同
+    // lyc:aic v2026.5：去掉了第二参数 baseCacheKey（缓存键现已不在调用点关心）
     const entry = loadPluginDoctorContractEntry(record);
+    // lyc: 如果 Doctor 合同加载成功 (entry!=null), 则将其添加到 Doctor 合同对象列表 (entries) 中, 否则跳过当前插件
     if (entry) {
       entries.push(entry);
     }
   }
+  // lyc:aic v2026.5：原本这里 doctorContractCache.set(cacheKey, entries) 缓存结果——已移除
+  // lyc: 返回解析后的 Doctor 合同对象列表
 
   return entries;
 }
@@ -306,6 +322,7 @@ export function setPluginDoctorContractRegistryModuleLoaderFactoryForTest(
   moduleLoaders.clear();
 }
 
+// lyc: 列出所有插件的兼容性配置规则
 export function listPluginDoctorLegacyConfigRules(params?: {
   config?: OpenClawConfig;
   workspaceDir?: string;

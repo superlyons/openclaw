@@ -1,3 +1,6 @@
+/* lyc:ai
+
+*/
 import { stdin as defaultStdin, stdout as defaultStdout } from "node:process";
 import { withProgress } from "../cli/progress.js";
 import { defaultRuntime, writeRuntimeJson, type RuntimeEnv } from "../runtime.js";
@@ -47,6 +50,8 @@ function crestodianCommandDepsFromOptions(
   };
 }
 
+/* lyc:ai
+*/
 async function runOneShot(
   input: string,
   runtime: RuntimeEnv,
@@ -59,16 +64,23 @@ async function runOneShot(
   });
 }
 
+/* lyc: 执行Crestodian核心调度器 
+*/
 export async function runCrestodian(
   opts: RunCrestodianOptions = {},
   runtime: RuntimeEnv = defaultRuntime,
 ): Promise<void> {
+  /* lyc:ai
+  */
   if (opts.json) {
+    // lyc: loadCrestodianOverview(): 加载系统概览(配置/Agent/网关/工具链)
     const overview = await (opts.loadOverview ?? loadCrestodianOverview)();
     writeRuntimeJson(runtime, overview);
     return;
   }
 
+  /* lyc:ai
+  */
   if (opts.message?.trim()) {
     const overview = await withProgress(
       {
@@ -79,12 +91,15 @@ export async function runCrestodian(
       },
       async () => await (opts.loadOverview ?? loadCrestodianOverview)(),
     );
+    // lyc: 以文本方式格式化输出关键的系统概览(loadCrestodianOverview()返回的overview)
     runtime.log((opts.formatOverview ?? formatCrestodianOverview)(overview));
     runtime.log("");
     await runOneShot(opts.message, runtime, opts);
     return;
   }
 
+  /* lyc:ai
+  */
   const interactive = opts.interactive ?? true;
   const input = opts.input ?? defaultStdin;
   const output = opts.output ?? defaultStdout;
@@ -98,6 +113,8 @@ export async function runCrestodian(
 
   const runInteractiveTui =
     opts.runInteractiveTui ?? (await import("./tui-backend.js")).runCrestodianTui;
+  // lyc: 加载完成, 停止进度条
   opts.onReady?.();
+  // lyc: 运行交互式TUI界面
   await runInteractiveTui(opts, runtime);
 }

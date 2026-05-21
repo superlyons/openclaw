@@ -24,6 +24,8 @@ const isSupportedNodeVersion = (version) =>
   version.major > MIN_NODE_MAJOR ||
   (version.major === MIN_NODE_MAJOR && version.minor >= MIN_NODE_MINOR);
 
+// lyc: 确保Node.js版本符合要求 >= 22.12
+// lyc: 如果当前Node.js版本低于要求, 则提示用户并退出程序
 const ensureSupportedNodeVersion = () => {
   if (isSupportedNodeVersion(parseNodeVersion(process.versions.node))) {
     return;
@@ -39,8 +41,16 @@ const ensureSupportedNodeVersion = () => {
   process.exit(1);
 };
 
+// lyc: 确保Node.js版本符合要求 >= 22.12
 ensureSupportedNodeVersion();
 
+// lyc:aic v2026.5 大改造：原本一个 `if (module.enableCompileCache && !process.env.NODE_DISABLE_COMPILE_CACHE)`
+//         的简单块被抽成 5 个 helper（isSourceCheckoutLauncher/isNodeCompileCacheDisabled/
+//         isNodeCompileCacheRequested/sanitizeCompileCachePathSegment/readPackageVersion）+
+//         一套 respawn 流程（runRespawnedChild / respawnWithoutCompileCacheIfNeeded /
+//         respawnWithPackagedCompileCacheIfNeeded）。原始 lyc 注释搬到下方真正 enableCompileCache 调用处。
+
+// lyc:aic 判断当前是不是"源码 checkout 启动"（看是否有 .git 或 src/entry.ts）——这种情况要关掉 compile cache
 const isSourceCheckoutLauncher = () =>
   existsSync(new URL("./.git", import.meta.url)) ||
   existsSync(new URL("./src/entry.ts", import.meta.url));
@@ -233,6 +243,8 @@ const respawnWithPackagedCompileCacheIfNeeded = () => {
 const waitingForCompileCacheRespawn =
   respawnWithoutCompileCacheIfNeeded() || respawnWithPackagedCompileCacheIfNeeded();
 
+// lyc: 启用模块编译缓存; 如果环境变量 NODE_DISABLE_COMPILE_CACHE 为 true, 则不启用缓存
+// lyc:aic v2026.5：除了原条件外还增加了"未在等待 respawn"和"非源码 checkout"两个守卫
 // https://nodejs.org/api/module.html#module-compile-cache
 if (
   !waitingForCompileCacheRespawn &&
@@ -268,8 +280,11 @@ const isDirectModuleNotFoundError = (err, specifier) => {
   );
 };
 
+// lyc: 安装进程警告过滤器
 const installProcessWarningFilter = async () => {
   // Keep bootstrap warnings consistent with the TypeScript runtime.
+  // lyc: 保持bootstrap警告与TypeScript运行时的风格一致。
+  // lyc: 注意: src\infra\warning-filter.ts有installProcessWarningFilter的实现, 但不确定/dist/warning-filter.js是否来自于此
   for (const specifier of ["./dist/warning-filter.js", "./dist/warning-filter.mjs"]) {
     try {
       const mod = await import(specifier);
@@ -345,6 +360,8 @@ const loadPrecomputedHelpText = (key) => {
   }
 };
 
+// lyc: 尝试输出根帮助文本
+// lyc: 如果成功输出, 则返回true; 否则返回false
 const tryOutputBareRootHelp = async () => {
   if (!isBareRootHelpInvocation(process.argv)) {
     return false;
@@ -382,8 +399,11 @@ const tryOutputBrowserHelp = () => {
   process.stdout.write(precomputed);
   return true;
 };
+// lyc:aic v2026.5：用 `if (!waitingForCompileCacheRespawn)` 把 help 快速路径整段包起来——
+//         如果当前正在等 compile-cache respawn，就不要走 help 或加载 entry.js
 
 if (!waitingForCompileCacheRespawn) {
+  // lyc: 尝试输出根帮助文本
   if (!isHelpFastPathDisabled() && (await tryOutputBareRootHelp())) {
     // OK
   } else if (!isHelpFastPathDisabled() && tryOutputBrowserHelp()) {

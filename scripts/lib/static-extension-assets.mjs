@@ -151,6 +151,17 @@ function discoverStaticExtensionRuntimeOverlayAssets(params = {}) {
   return [...assetsByDest.values()].toSorted((left, right) => left.dest.localeCompare(right.dest));
 }
 
+ * 获取静态扩展资源的输出路径列表
+ *
+ * 此函数返回所有静态扩展资源在分发目录中的目标路径列表，
+ * 路径使用正斜杠格式并按字母顺序排序。
+ * 主要用于构建系统确定输出文件依赖关系。
+ *
+ * @param {Object} params - 配置参数对象
+ * @param {Array} [params.assets] - 静态资源列表，默认使用 STATIC_EXTENSION_ASSETS
+ * @returns {string[]} 排序后的输出路径数组
+ */
+// lyc:aic 注释从 scripts/runtime-postbuild.mjs 迁移过来（v2026.5 抽函数到本文件）
 export function listStaticExtensionAssetOutputs(params = {}) {
   const assets = params.assets ?? discoverStaticExtensionAssets(params);
   return assets
@@ -165,6 +176,23 @@ export function listStaticExtensionAssetSources(params = {}) {
     .toSorted((left, right) => left.localeCompare(right));
 }
 
+ * 复制静态扩展资源文件到分发目录
+ *
+ * 某些扩展在运行时需要引用特定的静态资源文件，这些文件在捆绑的扩展代码中
+ * 通过源相对路径引用。此函数将这些预定义的静态资源从源目录复制到分发目录，
+ * 确保运行时能够正确找到它们。
+ *
+ * 当前包含的静态资源：
+ * - ACPX MCP 代理 (mcp-proxy.mjs) - 用于 MCP 协议通信
+ * - 差异查看器运行时 (viewer-runtime.js) - 用于显示代码差异
+ *
+ * @param {Object} params - 配置参数对象
+ * @param {string} [params.rootDir] - 项目根目录，默认使用 ROOT 常量
+ * @param {Array} [params.assets] - 要复制的静态资源列表，默认使用 STATIC_EXTENSION_ASSETS
+ * @param {Object} [params.fs] - 文件系统实现，默认使用 node:fs 模块
+ * @param {Function} [params.warn] - 警告输出函数，默认使用 console.warn
+ */
+// lyc:aic 注释从 scripts/runtime-postbuild.mjs 迁移过来（v2026.5 抽函数到本文件）
 export function copyStaticExtensionAssets(params = {}) {
   const rootDir = params.rootDir ?? process.cwd();
   const fsImpl = params.fs ?? fs;

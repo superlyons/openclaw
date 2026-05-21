@@ -10,22 +10,28 @@ import { SUB_CLI_DESCRIPTORS } from "./program/subcli-descriptors.js";
 const HELP_FLAGS = new Set(["-h", "--help"]);
 const VERSION_FLAGS = new Set(["-V", "--version"]);
 const ROOT_VERSION_ALIAS_FLAG = "-v";
+// lyc: 根命令描述对象为 合并核心 CLI 命令和子 CLI 命令 的描述对象
+// lyc: 这些命令是 OpenClaw CLI 核心功能的基础, 用于配置、运行、管理 OpenClaw 系统
 const ROOT_COMMAND_DESCRIPTORS = [...CORE_CLI_COMMAND_DESCRIPTORS, ...SUB_CLI_DESCRIPTORS];
+// lyc: 导出已知根命令的名称集合
 const KNOWN_ROOT_COMMANDS: ReadonlySet<string> = new Set(
   ROOT_COMMAND_DESCRIPTORS.map((descriptor) => descriptor.name),
 );
+// lyc: 导出已知的包含子命令的根命令的名称集合
 const ROOT_COMMANDS_WITH_SUBCOMMANDS: ReadonlySet<string> = new Set(
   ROOT_COMMAND_DESCRIPTORS.filter((descriptor) => descriptor.hasSubcommands).map(
     (descriptor) => descriptor.name,
   ),
 );
 
+// lyc: 判断命令行参数是否包含帮助标志、版本标志或根版本别名(-v)
 export function hasHelpOrVersion(argv: string[]): boolean {
   return (
     argv.some((arg) => HELP_FLAGS.has(arg) || VERSION_FLAGS.has(arg)) || hasRootVersionAlias(argv)
   );
 }
 
+// lyc: 判断命令行参数是否是帮助标志、版本标志或根版本别名(-v)的调用
 export function isHelpOrVersionInvocation(argv: string[]): boolean {
   if (hasRootVersionAlias(argv)) {
     return true;
@@ -47,29 +53,51 @@ export function isHelpOrVersionInvocation(argv: string[]): boolean {
     if (HELP_FLAGS.has(arg) || VERSION_FLAGS.has(arg)) {
       return true;
     }
+    // lyc: 不是 跟选项 参数 也不是 帮助 和 版本 选项参数, 
+    // lyc: 但是一个其它选项参数(因为以"-"开头), 记录已经略过一个不关心的选项参数(sawCommandOption=true), 继续解析下一个参数
     if (arg.startsWith("-")) {
       sawCommandOption = true;
       continue;
     }
+
+    // lyc: 代表当前参数(arg) 不是选项参数, 是一个 文本名 或 命令 参数
+
+    // lyc: 把当前参数(arg) 加入 positionals 数组
     positionals.push(arg);
+    // lyc: 如果当前参数(arg) 不是 "help" 命令参数, 则继续解析下一个参数
     if (arg !== "help") {
       continue;
     }
+    // lyc: 这里代表当前参数(arg) 是 "help" 命令参数
+    // lyc: 是"help"命令参数但之前有一个非跟选项参数被略过, 则返回 false; EXP: openclaw --option-1 help
     if (sawCommandOption) {
       return false;
     }
+    // lyc: 是"help"命令参数但之前没有一个非跟选项参数被略过
+    // lyc: 并且是第一个命令参数, 则返回 true; EXP: openclaw help
     if (positionals.length === 1) {
       return true;
     }
+
+    // lyc: 当前是"help"命令参数, 但不是第一个命令参数
+    // lyc: 获得第一个命令参数(primary)
     const [primary] = positionals;
     // Positional `help` may be a command argument for known leaf commands.
     // Unknown roots are treated as plugin command namespaces.
+    // lyc: 位置参数“help”可能是已知叶子命令的命令参数。
+    // lyc: 未知的根目录被视为插件命令命名空间
+    // lyc: 如果主命令(primary)是未知的根命令, 则返回 true; EXP: openclaw unknownCmd help, openclaw unknownCmd subCmd help
     if (!primary || !KNOWN_ROOT_COMMANDS.has(primary)) {
       return true;
     }
+    // lyc: 这里代表主命令(primary)是已知的根命令
+    // lyc: 并且当前是第二个命令参数 并且 主命令(primary)是已知的包含子命令的根命令, 则返回 true, EXP: openclaw config set help
     if (positionals.length === 2 && ROOT_COMMANDS_WITH_SUBCOMMANDS.has(primary)) {
       return true;
     }
+    // lyc: 如果主命令(primary)是已知的根命令, 但当前不是第二个命令参数 或 主命令(primary)不是已知的包含子命令的根命令, 则返回 false
+    // lyc: EXP: openclaw cmd subCmd thirdCmd help, openclaw onboard help //主命令onboard没有子命令
+    // lyc: 这里有bug, 既然openclaw config set help是对的 为什么openclaw onboard help是错的?
     return false;
   }
   return false;
@@ -96,7 +124,10 @@ export function hasFlag(argv: string[], name: string): boolean {
   return false;
 }
 
+/* lyc: 
+  */
 export function hasRootVersionAlias(argv: string[]): boolean {
+  // lyc: 忽略 node 路径和脚本路径
   const args = argv.slice(2);
   let hasAlias = false;
   for (let i = 0; i < args.length; i += 1) {
@@ -104,21 +135,26 @@ export function hasRootVersionAlias(argv: string[]): boolean {
     if (!arg) {
       continue;
     }
+    // lyc: 遇到参数终止符 "--" 就停止解析, "--"代表之后的参数不再解析选项
     if (arg === FLAG_TERMINATOR) {
       break;
     }
+    // lyc: 找到根版本别名(-v)
     if (arg === ROOT_VERSION_ALIAS_FLAG) {
       hasAlias = true;
       continue;
     }
+    // lyc: 尝试消费(略过)根选项（如 --profile, --log-level 等）
     const consumed = consumeRootOptionToken(args, i);
     if (consumed > 0) {
       i += consumed - 1;
       continue;
     }
+    // lyc: 遇到其他选项("-"或"--"开头) 但未找到 -v，继续搜索
     if (arg.startsWith("-")) {
       continue;
     }
+    // lyc: 遇到第一个非选项参数（如文件名(file.txt)、命令(build)等）且还没找到 -v 或 终止符 "--"，返回 false
     return false;
   }
   return hasAlias;
@@ -128,6 +164,8 @@ export function isRootVersionInvocation(argv: string[]): boolean {
   return isRootInvocationForFlags(argv, VERSION_FLAGS, { includeVersionAlias: true });
 }
 
+/* lyc: 
+*/
 function isRootInvocationForFlags(
   argv: string[],
   targetFlags: Set<string>,
@@ -156,6 +194,8 @@ function isRootInvocationForFlags(
       continue;
     }
     // Unknown flags and subcommand-scoped help/version should fall back to Commander.
+    // lyc: 未知选项和子命令范围的 帮助/版本选项 应该回退到 Commander。
+    // lyc: arg不是"--", 目标选项(targetFlags), 不是根选项(RootOptions), 则返回false
     return false;
   }
   return hasTarget;
@@ -210,6 +250,8 @@ export function getCommandPathWithRootOptions(argv: string[], depth = 2): string
   return getCommandPathInternal(argv, depth, { skipRootOptions: true });
 }
 
+/* lyc:
+*/
 function getCommandPathInternal(
   argv: string[],
   depth: number,
@@ -222,20 +264,29 @@ function getCommandPathInternal(
     if (!arg) {
       continue;
     }
+    // lyc: 遇到参数终止符 "--" 就停止解析, "--"代表之后的参数不再解析选项
     if (arg === "--") {
       break;
     }
+
+    /* lyc: 
+      */
     if (opts.skipRootOptions) {
+      // lyc: 只关注根选项(RootOptions) 其它一律返回0
       const consumed = consumeRootOptionToken(args, i);
+      // lyc: consumed == 0代表args[i]不是根选项,继续下面的搜索
       if (consumed > 0) {
         i += consumed - 1;
         continue;
       }
     }
+    // lyc: 当前参数以"-"或"--"开头, 则一定不是命令路径 和 根选项(RootOptions), 而是其它的选项参数
     if (arg.startsWith("-")) {
       continue;
     }
+    // lyc: 一定是命令路径, 则加入路径
     path.push(arg);
+    // lyc: 达到指定命令路径的深度, 则跳出循环
     if (path.length >= depth) {
       break;
     }
@@ -360,6 +411,8 @@ export function buildParseArgv(params: {
   return ["node", programName || "openclaw", ...normalizedArgv];
 }
 
+// lyc: 判断是否需要迁移状态(根据命令路径) (如从旧版本升级)
+// lyc: health, status, sessions, update status, config get|unset, models list|status, agent 不需要迁移状态
 export function shouldMigrateStateFromPath(path: string[]): boolean {
   if (path.length === 0) {
     return true;

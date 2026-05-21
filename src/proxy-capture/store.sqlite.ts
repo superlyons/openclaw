@@ -97,6 +97,7 @@ function sortObservedCounts(counts: Map<string, number>): CaptureObservedDimensi
     .toSorted((left, right) => right.count - left.count || left.value.localeCompare(right.value));
 }
 
+// lyc: 调试代理捕获存储类
 export class DebugProxyCaptureStore {
   readonly db: DatabaseSync;
   private readonly walMaintenance: SqliteWalMaintenance;
@@ -106,6 +107,7 @@ export class DebugProxyCaptureStore {
     readonly dbPath: string,
     readonly blobDir: string,
   ) {
+    // lyc: 打开数据库连接, 并创建必要的表
     const opened = openDatabase(dbPath);
     this.db = opened.db;
     this.walMaintenance = opened.walMaintenance;
@@ -124,6 +126,7 @@ export class DebugProxyCaptureStore {
     return this.closed;
   }
 
+  // lyc: 向capture_sessions表中插入或更新会话记录
   upsertSession(session: CaptureSessionRecord): void {
     this.db
       .prepare(
@@ -154,7 +157,9 @@ export class DebugProxyCaptureStore {
       .run(endedAt, sessionId);
   }
 
+  // lyc: 向blobDir目录下持久化请求体或响应体, data为请求体或响应体, contentType为请求体或响应体的MIME类型, 返回持久化后的记录ID
   persistPayload(data: Buffer, contentType?: string): CaptureBlobRecord {
+    // lyc: 持久化请求体或响应体, 并返回持久化后的记录ID
     return writeCaptureBlob({ blobDir: this.blobDir, data, contentType });
   }
 
@@ -469,6 +474,7 @@ let cachedStore: DebugProxyCaptureStore | null = null;
 let cachedKey = "";
 let cachedStoreLeases = 0;
 
+// lyc: 获取调试代理捕获存储(DebugProxyCaptureStore), 如果不存在则创建它, cachedStore和cachedKey是全局变量, 用于缓存, 避免重复创建
 export function getDebugProxyCaptureStore(dbPath: string, blobDir: string): DebugProxyCaptureStore {
   const key = `${dbPath}:${blobDir}`;
   if (!cachedStore || cachedStore.isClosed || cachedKey !== key) {
@@ -479,6 +485,7 @@ export function getDebugProxyCaptureStore(dbPath: string, blobDir: string): Debu
   return cachedStore;
 }
 
+// lyc: 关闭调试代理捕获存储(DebugProxyCaptureStore), 并清除缓存
 export function closeDebugProxyCaptureStore(): void {
   if (!cachedStore) {
     return;
@@ -512,6 +519,8 @@ export function acquireDebugProxyCaptureStore(
   };
 }
 
+// lyc: 持久化请求体或响应体, 并返回持久化后的记录
+// lyc: params.data为请求体或响应体, params.contentType为请求体或响应体的MIME类型, params.previewLimit为预览长度, 返回持久化后的记录
 export function persistEventPayload(
   store: DebugProxyCaptureStore,
   params: { data?: Buffer | string | null; contentType?: string; previewLimit?: number },
@@ -521,6 +530,7 @@ export function persistEventPayload(
   }
   const buffer = Buffer.isBuffer(params.data) ? params.data : Buffer.from(params.data);
   const previewLimit = params.previewLimit ?? 8192;
+  // lyc: 持久化请求体或响应体, 并返回持久化后的记录
   const blob = store.persistPayload(buffer, params.contentType);
   return {
     dataText: buffer.subarray(0, previewLimit).toString("utf8"),

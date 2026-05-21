@@ -33,6 +33,8 @@ function hasEnvVarRef(value: string): boolean {
  * - `${VAR}` → env value (returns null if missing)
  * - `$${VAR}` → literal `${VAR}` (escape sequence)
  */
+/* lyc: 解析template中的`${VAR}`环境变量引用(env[VAR])并返回
+*/
 function tryResolveString(template: string, env: NodeJS.ProcessEnv): string | null {
   const ENV_VAR_NAME = /^[A-Z_][A-Z0-9_]*$/;
   const chunks: string[] = [];
@@ -86,12 +88,15 @@ function tryResolveString(template: string, env: NodeJS.ProcessEnv): string | nu
  * @param env - Environment variables for verification
  * @returns A new config object with env var references restored where appropriate
  */
+/* lyc:
+*/
 export function restoreEnvVarRefs(
   incoming: unknown,
   parsed: unknown,
   env: NodeJS.ProcessEnv = process.env,
 ): unknown {
   // If parsed has no env var refs at this level, return incoming as-is
+  // 如果parsed中没有环境变量引用, 则直接返回incoming
   if (parsed === null || parsed === undefined) {
     return incoming;
   }

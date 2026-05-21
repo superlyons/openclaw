@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { dirname } from "node:path";
 
+// lyc: 写入文本文件, 如果文件不存在或内容不同则写入并返回true, 否则返回false
 export function writeTextFileIfChanged(filePath, contents) {
   const next = String(contents);
   try {

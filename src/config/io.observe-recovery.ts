@@ -581,6 +581,16 @@ function collectPollutedSecretPlaceholders(
   return output;
 }
 
+/* lyc:ai （从 src/config/io.ts 迁移过来——v2026.5 把这俩 helper 抽到本文件）
+
+
+*/
+
+/* lyc:ai （从 src/config/io.ts 迁移过来）
+*/
+
+/* lyc: 尝试修复可疑的配置文件, (从configPath+".bak"恢复)
+*/
 export async function maybeRecoverSuspiciousConfigRead(params: {
   deps: ObserveRecoveryDeps;
   configPath: string;

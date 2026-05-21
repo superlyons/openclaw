@@ -36,6 +36,10 @@ export type EnvHttpProxyAgentProxyOptions = {
  * - HTTPS requests prefer https_proxy/HTTPS_PROXY, then fall back to http_proxy/HTTP_PROXY
  * - ALL_PROXY is ignored by EnvHttpProxyAgent
  */
+/* lyc: 匹配基于环境的HTTP/S代理选择的EnvHttpProxyAgent语义： 
+*/
+/* lyc:
+*/
 export function resolveEnvHttpProxyUrl(
   protocol: "http" | "https",
   env: NodeJS.ProcessEnv = process.env,
@@ -51,6 +55,7 @@ export function resolveEnvHttpProxyUrl(
   }
   return httpProxy ?? undefined;
 }
+/* lyc: 检查环境变量中是否配置了HTTP/S代理 (env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY)*/
 
 export function hasEnvHttpProxyConfigured(
   protocol: "http" | "https" = "https",
@@ -59,6 +64,7 @@ export function hasEnvHttpProxyConfigured(
   return resolveEnvHttpProxyUrl(protocol, env) !== undefined;
 }
 
+// lyc: 从环境变量中解析AllProxyUrl(env.all_proxy, env.ALL_PROXY, undefined)
 function resolveEnvAllProxyUrl(env: NodeJS.ProcessEnv): string | undefined {
   const lowerAllProxy = normalizeProxyEnvValue(env.all_proxy);
   const allProxy =
@@ -73,10 +79,18 @@ function resolveEnvAllProxyUrl(env: NodeJS.ProcessEnv): string | undefined {
  * HTTP/HTTPS proxy overrides. Keep this helper separate from the
  * HTTP(S)-only URL helpers so SSRF trusted-env proxy gates do not widen.
  */
+/* lyc:
+ * 为undici的EnvHttpProxyAgent构建显式选项。
+ * EnvHttpProxyAgent 本身并不读取 ALL_PROXY，但它接受显式的 HTTP/HTTPS 代理覆盖。请将此助手函数与仅限 HTTP(S) 的 URL 助手函数分开，以避免扩大了 SSRF 可信环境代理门。
+*/
+// lyc: 从环境变量中解析HTTP/S代理URL(env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY)
+// lyc: 返回解析后的代理URL, {httpProxy?: string, httpsProxy?: string} 如果没有配置代理, 则返回undefined
 export function resolveEnvHttpProxyAgentOptions(
   env: NodeJS.ProcessEnv = process.env,
 ): EnvHttpProxyAgentProxyOptions | undefined {
+  // lyc: 从环境变量中解析AllProxyUrl(env.all_proxy, env.ALL_PROXY, undefined)
   const allProxy = resolveEnvAllProxyUrl(env);
+  // lyc: env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY
   const httpProxy = resolveEnvHttpProxyUrl("http", env) ?? allProxy;
   const httpsProxy = resolveEnvHttpProxyUrl("https", env) ?? httpProxy;
   const options: EnvHttpProxyAgentProxyOptions = {
@@ -86,6 +100,7 @@ export function resolveEnvHttpProxyAgentOptions(
   return options.httpProxy || options.httpsProxy ? options : undefined;
 }
 
+// lyc: 检查环境变量中是否配置了HTTP/S代理 (env.http_proxy, env.https_proxy, env.HTTP_PROXY, env.HTTPS_PROXY)
 export function hasEnvHttpProxyAgentConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
   return resolveEnvHttpProxyAgentOptions(env) !== undefined;
 }

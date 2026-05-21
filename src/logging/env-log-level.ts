@@ -2,6 +2,8 @@ import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { ALLOWED_LOG_LEVELS, type LogLevel, tryParseLogLevel } from "./levels.js";
 import { loggingState } from "./state.js";
 
+/* lyc: 
+*/
 export function resolveEnvLogLevelOverride(): LogLevel | undefined {
   const trimmed = normalizeOptionalString(process.env.OPENCLAW_LOG_LEVEL) ?? "";
   if (!trimmed) {

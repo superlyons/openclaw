@@ -6,6 +6,7 @@ import { resolveCliStartupPolicy } from "./command-startup-policy.js";
 
 type CliStartupPolicy = ReturnType<typeof resolveCliStartupPolicy>;
 
+// lyc: 解析CLI执行启动上下文, 包含命令调用信息(invocation), 命令路径(commandPath), 启动策略(startupPolicy)
 export function resolveCliExecutionStartupContext(params: {
   argv: string[];
   jsonOutputMode: boolean;
@@ -27,6 +28,7 @@ export function resolveCliExecutionStartupContext(params: {
   };
 }
 
+// lyc: 应用CLI执行启动展示, 设置全局变量loggingState.forceConsoleToStderr=true强制输出到stderr(保证stdout干净) 和 打印路由banner
 export async function applyCliExecutionStartupPresentation(params: {
   argv?: string[];
   routeLogsToStderrOnSuppress?: boolean;
@@ -48,6 +50,8 @@ export async function applyCliExecutionStartupPresentation(params: {
   emitCliBanner(params.version);
 }
 
+/* lyc:ai 
+*/
 export async function ensureCliExecutionBootstrap(params: {
   runtime: RuntimeEnv;
   commandPath: string[];
@@ -56,6 +60,8 @@ export async function ensureCliExecutionBootstrap(params: {
   loadPlugins?: boolean;
   skipConfigGuard?: boolean;
 }) {
+  /* lyc:ai 
+  */
   await ensureCliCommandBootstrap({
     runtime: params.runtime,
     commandPath: params.commandPath,

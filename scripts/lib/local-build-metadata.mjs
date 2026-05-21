@@ -6,6 +6,9 @@ import { BUILD_STAMP_FILE, RUNTIME_POSTBUILD_STAMP_FILE } from "./local-build-me
 
 export { BUILD_STAMP_FILE, RUNTIME_POSTBUILD_STAMP_FILE };
 
+/* lyc: 解析当前Git分支的HEAD, 返回HEAD值|null
+*/
+// lyc:aic 注释从 scripts/build-stamp.mjs 迁移过来（v2026.5 把实现抽到本文件）
 export function resolveGitHead(params = {}) {
   const cwd = params.cwd ?? process.cwd();
   const spawnSyncImpl = params.spawnSync ?? spawnSync;
@@ -25,6 +28,12 @@ export function resolveGitHead(params = {}) {
   }
 }
 
+ * 写入构建戳文件(.buildstamp是文件): /home/openclaw/dist/.buildstamp
+ *
+ * 此函数将当前构建的时间戳和 Git 提交哈希写入到 dist/.buildstamp 文件中。
+ * 文件内容为 JSON 格式，包含 builtAt 和 head 字段。
+ */
+// lyc:aic 注释从 scripts/build-stamp.mjs 迁移过来
 export function writeBuildStamp(params = {}) {
   const cwd = params.cwd ?? process.cwd();
   const fsImpl = params.fs ?? fs;

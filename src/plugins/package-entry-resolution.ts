@@ -1,3 +1,6 @@
+/* lyc:aic v2026.5 大重构（13 个冲突点）。
+ * 你的 47 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/package-entry-resolution.ts.4.26.lyc-snapshot.ts。
+ */
 import fs from "node:fs";
 import path from "node:path";
 import {

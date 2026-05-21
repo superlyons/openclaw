@@ -206,6 +206,23 @@ function stagePluginRuntimeOverlay(sourceDir, targetDir, relativeDir = "") {
   }
 }
 
+// lyc:aic v2026.5：upstream 删除了 linkPluginNodeModules 函数（连同其所有调用点）。
+//         下方 stageBundledPluginRuntime 的 JSDoc lyc 注释保留——函数本身还在。
+ * 分阶段处理捆绑插件的运行时文件结构
+ *
+ * 此函数创建 dist-runtime/ 目录，作为插件在运行时的实际工作目录。
+ * 它将 dist/extensions/ 中的插件文件通过以下方式映射到运行时目录：
+ * - 对于 .js 文件：创建包装模块以支持 ES 模块的导入导出语法
+ * - 对于元数据文件（package.json、openclaw.plugin.json 等）：直接复制
+ * - 对于其他文件：创建符号链接（Windows 上使用 junction）
+ * - 对于 node_modules 目录：创建符号链接指向 dist/extensions/{plugin}/node_modules
+ *
+ * 这种设计允许运行时环境正确加载插件，同时保持文件系统的整洁和高效。
+ *
+ * @param {Object} params - 配置参数对象
+ * @param {string} [params.cwd] - 当前工作目录
+ * @param {string} [params.repoRoot] - 仓库根目录，默认使用 cwd 或 process.cwd()
+ */
 export function stageBundledPluginRuntime(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
   const distRoot = path.join(repoRoot, "dist");

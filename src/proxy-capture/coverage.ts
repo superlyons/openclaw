@@ -20,6 +20,7 @@ export type DebugProxyCoverageSummary = {
   uncovered: number;
 };
 
+// lyc: 调试代理覆盖情况条目
 const DEBUG_PROXY_COVERAGE_ENTRIES: readonly DebugProxyCoverageEntry[] = [
   {
     id: "provider-transport-fetch",
@@ -122,18 +123,24 @@ const DEBUG_PROXY_COVERAGE_ENTRIES: readonly DebugProxyCoverageEntry[] = [
 
 let warnedCoverageSessionKey: string | null = null;
 
+// lyc: 列出调试代理覆盖情况条目
 export function listDebugProxyCoverageEntries(): DebugProxyCoverageEntry[] {
   return DEBUG_PROXY_COVERAGE_ENTRIES.map((entry) => ({
     ...entry,
+    // lyc: 这里为了深拷贝 protocols 数组，避免修改原始数组
     protocols: [...entry.protocols],
   }));
 }
+// lyc: 汇总调试代理覆盖情况
 
 export function summarizeDebugProxyCoverage(
   entries: readonly DebugProxyCoverageEntry[] = DEBUG_PROXY_COVERAGE_ENTRIES,
 ): DebugProxyCoverageSummary {
+  // lyc: 统计已捕获的条目数
   let captured = 0;
+  // lyc: 统计仅通过代理路由的条目数
   let proxyOnly = 0;
+  // lyc: 统计未被获获的条目数
   let uncovered = 0;
   for (const entry of entries) {
     if (entry.status === "captured") {
@@ -154,6 +161,7 @@ export function summarizeDebugProxyCoverage(
   };
 }
 
+// lyc: 构建调试代理覆盖情况报告
 export function buildDebugProxyCoverageReport() {
   const entries = listDebugProxyCoverageEntries();
   return {
@@ -162,6 +170,7 @@ export function buildDebugProxyCoverageReport() {
   };
 }
 
+// lyc: 检查调试代理覆盖情况, 并在必要时警告(仅在新会话中输出警告)
 export function maybeWarnAboutDebugProxyCoverage(
   settings: DebugProxySettings = resolveDebugProxySettings(),
   warn: (message: string) => void = (message) => process.stderr.write(`${message}\n`),
@@ -170,20 +179,25 @@ export function maybeWarnAboutDebugProxyCoverage(
     return;
   }
   const sessionKey = `${settings.sessionId}:${settings.proxyUrl ?? ""}`;
+  // lyc: 检查是否已警告过当前会话
   if (warnedCoverageSessionKey === sessionKey) {
     return;
   }
   warnedCoverageSessionKey = sessionKey;
+  // lyc: 构建调试代理覆盖情况报告
 
   const report = buildDebugProxyCoverageReport();
   const { summary } = report;
+  // lyc: 过滤出未被获获的条目(DEBUG_PROXY_COVERAGE_ENTRIES[].status="uncovered"|"proxy-only")
   const partial = report.entries.filter((entry) => entry.status !== "captured");
   if (partial.length === 0) {
     return;
   }
+  // lyc: [openclaw代理] 调试代理覆盖率：已捕获100/100，仅代理0，未覆盖0。
   warn(
     `[openclaw proxy] debug proxy coverage: ${summary.captured}/${summary.total} captured, ${summary.proxyOnly} proxy-only, ${summary.uncovered} uncovered.`,
   );
+  // lyc: [openclaw 代理] 剩余缺口：feishu-client-http、feishu-client-ws。运行 openclaw proxy coverage 命令查看详情。
   warn(
     `[openclaw proxy] remaining gaps: ${partial.map((entry) => entry.id).join(", ")}. Run \`openclaw proxy coverage\` for details.`,
   );

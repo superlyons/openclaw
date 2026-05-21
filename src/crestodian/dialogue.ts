@@ -1,3 +1,5 @@
+/* lyc:ai
+*/
 import type { RuntimeEnv } from "../runtime.js";
 import type { CrestodianAssistantPlan, CrestodianAssistantPlanner } from "./assistant.js";
 import {
@@ -20,12 +22,15 @@ export function isYes(input: string): boolean {
   return /^(y|yes|apply|do it|approved?)$/i.test(input.trim());
 }
 
+/* lyc:ai
+*/
 export async function resolveCrestodianOperation(
   input: string,
   runtime: RuntimeEnv,
   opts: CrestodianDialogueOptions,
 ): Promise<CrestodianOperation> {
   const operation = parseCrestodianOperation(input);
+  // lyc: 是否需要调用AI助手, 不需要则返回解析结果operation
   if (!shouldAskAssistant(input, operation)) {
     return operation;
   }
@@ -43,6 +48,7 @@ export async function resolveCrestodianOperation(
   return planned;
 }
 
+// lyc: 是否应该调用AI助手
 function shouldAskAssistant(input: string, operation: CrestodianOperation): boolean {
   if (operation.kind !== "none") {
     return false;

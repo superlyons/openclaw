@@ -1,3 +1,7 @@
+/* lyc:aic v2026.5 大重构：本文件相比 4.26 增删大量函数/参数。
+ * 你的 50 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/manifest.ts.4.26.lyc-snapshot.ts。
+ * 阅读策略：对照 snapshot 看你之前的理解 → 看当前 HEAD 代码确认是否仍然成立。
+ */
 import fs from "node:fs";
 import path from "node:path";
 import type { ChannelConfigRuntimeSchema } from "../channels/plugins/types.config.js";

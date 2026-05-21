@@ -43,6 +43,7 @@ const EXAMPLES = [
   ],
 ] as const;
 
+// lyc: 配置程序帮助信息, 指openclaw命令
 export function configureProgramHelp(program: Command, ctx: ProgramContext) {
   program
     .name(CLI_NAME)
@@ -60,6 +61,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
       "--profile <name>",
       "Use a named profile (isolates OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH under ~/.openclaw-<name>)",
     )
+    //lyc: parseCliLogLevelOption是一个函数时不代表默认值, 况且<level>是必填参数, 当输入命令:openclaw --log-level debug时, 会调用parseCliLogLevelOption("debug")它的返回值会存入program.logLevel和program.opts().logLevel
     .option(
       "--log-level <level>",
       `Global log level override for file + console (${CLI_LOG_LEVEL_VALUES})`,
@@ -67,15 +69,20 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     );
 
   program.option("--no-color", "Disable ANSI colors", false);
+  // lyc: 定义选项形式的帮助触发器, 当用户输入 -h 或者 --help 时，请显示帮助
   program.helpOption("-h, --help", "Display help for command");
+  // lyc: 定义命令形式的帮助触发器, 允许用户输入 openclaw help gateway 来查看 gateway 命令的帮助
   program.helpCommand("help [command]", "Display help for command");
 
+  // lyc: 美化输出帮助信息
   program.configureHelp({
     // sort options and subcommands alphabetically
+    // lyc: 按字母顺序排序子命令和选项
     sortSubcommands: true,
     sortOptions: true,
     optionTerm: (option) => theme.option(option.flags),
     subcommandTerm: (cmd) => {
+      // lyc: 格式化子命令, 如果是根命令且有子命令, 则添加 * 后缀
       const isRootCommand = cmd.parent === program;
       const hasSubcommands = isRootCommand && ROOT_COMMANDS_WITH_SUBCOMMANDS.has(cmd.name());
       return theme.command(hasSubcommands ? `${cmd.name()} *` : cmd.name());
@@ -98,6 +105,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
       .replace(/^Commands:/gm, theme.heading("Commands:"));
   };
 
+  // lyc: 接管 CLI 的输出流
   program.configureOutput({
     writeOut: (str) => {
       process.stdout.write(formatHelpOutput(str));
@@ -120,6 +128,8 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     process.exit(0);
   }
 
+  // lyc: 在帮助信息的特定位置插入自定义的文本块
+  // lyc: beforeAll在所有内容（包括 Usage, Options 等）之前 插入Logo Banner, 当你输入 --help 时, 会在最开始显示Logo Banner
   program.addHelpText("beforeAll", () => {
     if (hasEmittedCliBanner() || process.env.OPENCLAW_SUPPRESS_HELP_BANNER === "1") {
       return "";
@@ -133,6 +143,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     ([cmd, desc]) => `  ${theme.command(replaceCliName(cmd, CLI_NAME))}\n    ${theme.muted(desc)}`,
   ).join("\n");
 
+  // lyc: 在所有内容之后（通常在底部）插入自定义的文本块, 当你输入 --help 时, 会在最底部显示示例和文档链接
   program.addHelpText("afterAll", ({ command }) => {
     if (command !== program) {
       return "";

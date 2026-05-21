@@ -1,3 +1,7 @@
+/* lyc:aic v2026.5 大重构：插件发现流程大改。
+ * 你的 92 处 lyc 中文注释已完整保存到 .ai_claude/snapshots/discovery.ts.4.26.lyc-snapshot.ts。
+ * 该文件是插件发现/扫描/合并的核心，建议对照 snapshot 阅读理解你之前的认知。
+ */
 import fs from "node:fs";
 import path from "node:path";
 import type { PluginInstallRecord } from "../config/types.plugins.js";

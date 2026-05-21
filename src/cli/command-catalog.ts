@@ -50,6 +50,7 @@ export type CliCommandCatalogEntry = {
   };
 };
 
+// lyc: CLI命令目录, 包含所有命令的路径, 策略, 路由等信息
 export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   {
     commandPath: ["crestodian"],
@@ -119,6 +120,11 @@ export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
     commandPath: ["migrate"],
     policy: { bypassConfigGuard: true, loadPlugins: "never", networkProxy: "bypass" },
   },
+  /* lyc:ai （从 src/cli/plugin-registry-loader.ts 迁移过来——v2026.5 把 scope 决策从函数搬到了 catalog 里）
+   * status/health 命令只需要 "channels" 范围（只加载通道插件），避免加载所有插件以显著提高启动速度。
+   * 这两个诊断命令只需要知道有哪些通道可用，不需要加载 agents、memory 等插件。
+   * 其他命令的 catalog 条目则会写 `pluginRegistry: { scope: "all" }`。
+   */
   {
     commandPath: ["status"],
     policy: {

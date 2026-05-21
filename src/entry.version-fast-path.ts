@@ -15,9 +15,11 @@ export function tryHandleRootVersionFastPath(
     }>;
   } = {},
 ): boolean {
+  // lyc: 检查是否是容器目标命令, 是则直接返回false
   if (resolveCliContainerTarget(argv, deps.env)) {
     return false;
   }
+  // lyc: 检查是否是根版本命令, 不是则直接返回false
   if (!isRootVersionInvocation(argv)) {
     return false;
   }
@@ -41,6 +43,7 @@ export function tryHandleRootVersionFastPath(
       ]);
       return { VERSION, resolveCommitHash };
     });
+  // lyc: 这里代表不是容器目标命令但是是根版本命令, 则直接打印版本信息并退出进程
 
   resolveVersion()
     .then(({ VERSION, resolveCommitHash }) => {

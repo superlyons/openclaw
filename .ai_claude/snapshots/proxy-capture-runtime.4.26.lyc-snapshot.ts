@@ -1,0 +1,450 @@
+import { randomUUID } from "node:crypto";
+import { URL } from "node:url";
+import { resolveDebugProxySettings, type DebugProxySettings } from "./env.js";
+import {
+  closeDebugProxyCaptureStore,
+  getDebugProxyCaptureStore,
+  persistEventPayload,
+  safeJsonString,
+} from "./store.sqlite.js";
+import type {
+  CaptureDirection,
+  CaptureEventKind,
+  CaptureEventRecord,
+  CaptureProtocol,
+} from "./types.js";
+
+const DEBUG_PROXY_FETCH_PATCH_KEY = Symbol.for("openclaw.debugProxy.fetchPatch");
+const REDACTED_CAPTURE_HEADER_VALUE = "[REDACTED]";
+const SENSITIVE_CAPTURE_HEADER_NAMES = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "api-key",
+  "apikey",
+  "x-auth-token",
+  "auth-token",
+  "x-access-token",
+  "access-token",
+]);
+const SENSITIVE_CAPTURE_HEADER_NAME_FRAGMENTS = [
+  "api-key",
+  "apikey",
+  "token",
+  "secret",
+  "password",
+  "credential",
+  "session",
+];
+
+type GlobalFetchPatchedState = {
+  originalFetch: typeof globalThis.fetch;
+  patchedFetch: typeof globalThis.fetch;
+};
+
+type GlobalFetchPatchTarget = typeof globalThis & {
+  [DEBUG_PROXY_FETCH_PATCH_KEY]?: GlobalFetchPatchedState;
+};
+
+function protocolFromUrl(rawUrl: string): CaptureProtocol {
+  try {
+    const url = new URL(rawUrl);
+    switch (url.protocol) {
+      case "https:":
+        return "https";
+      case "wss:":
+        return "wss";
+      case "ws:":
+        return "ws";
+      default:
+        return "http";
+    }
+  } catch {
+    return "http";
+  }
+}
+
+function resolveUrlString(input: RequestInfo | URL): string | null {
+  if (input instanceof URL) {
+    return input.toString();
+  }
+  if (typeof input === "string") {
+    return input;
+  }
+  if (typeof Request !== "undefined" && input instanceof Request) {
+    return input.url;
+  }
+  return null;
+}
+
+function isSensitiveCaptureHeaderName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (SENSITIVE_CAPTURE_HEADER_NAMES.has(normalized)) {
+    return true;
+  }
+  return SENSITIVE_CAPTURE_HEADER_NAME_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
+function redactedCaptureHeaders(
+  headers: Headers | Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  const entries =
+    headers instanceof Headers ? Array.from(headers.entries()) : Object.entries(headers);
+  const redacted: Record<string, string> = {};
+  for (const [name, value] of entries) {
+    redacted[name] = isSensitiveCaptureHeaderName(name) ? REDACTED_CAPTURE_HEADER_VALUE : value;
+  }
+  return redacted;
+}
+
+function createHttpCaptureEventBase(params: {
+  settings: DebugProxySettings;
+  rawUrl: string;
+  url: URL;
+  transport?: "http" | "sse";
+  direction: CaptureDirection;
+  kind: CaptureEventKind;
+  flowId: string;
+  method: string;
+}): CaptureEventRecord {
+  return {
+    sessionId: params.settings.sessionId,
+    ts: Date.now(),
+    sourceScope: "openclaw",
+    sourceProcess: params.settings.sourceProcess,
+    protocol: params.transport ?? protocolFromUrl(params.rawUrl),
+    direction: params.direction,
+    kind: params.kind,
+    flowId: params.flowId,
+    method: params.method,
+    host: params.url.host,
+    path: `${params.url.pathname}${params.url.search}`,
+  };
+}
+
+// lyc: 为全局Fetch函数安装调试代理的补丁, 用于向数据库(调试代理捕获存储(DebugProxyCaptureStore))记录http交流信息
+function installDebugProxyGlobalFetchPatch(settings: DebugProxySettings): void {
+  // lyc: 全局必须存在fetch函数, 否则直接返回
+  if (typeof globalThis.fetch !== "function") {
+    return;
+  }
+  // lyc: 检查是否已经安装了补丁, 是则直接返回
+  const patched = globalThis as GlobalFetchPatchTarget;
+  const existing = patched[DEBUG_PROXY_FETCH_PATCH_KEY];
+  if (existing && globalThis.fetch === existing.patchedFetch) {
+    return;
+  }
+  // lyc: 开始安装补丁
+  // lyc: 保存原始fetch函数引用
+  const originalFetch = globalThis.fetch;
+  // lyc: 保存原始fetch函数引用到patched对象中
+  const callOriginalFetch = originalFetch.bind(globalThis);
+  // lyc: fetch函数安装调试代理的补丁
+  const patchedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = resolveUrlString(input);
+    try {
+      const response = await callOriginalFetch(input, init);
+      // lyc: 如果是http,https请求, 则记录http交流信息
+      if (url && /^https?:/i.test(url)) {
+        captureHttpExchange({
+          url,
+          method:
+            (typeof Request !== "undefined" && input instanceof Request
+              ? input.method
+              : undefined) ??
+            init?.method ??
+            "GET",
+          requestHeaders:
+            (typeof Request !== "undefined" && input instanceof Request
+              ? input.headers
+              : undefined) ?? (init?.headers as Headers | Record<string, string> | undefined),
+          requestBody:
+            (typeof Request !== "undefined" && input instanceof Request
+              ? (input as Request & { body?: BodyInit | null }).body
+              : undefined) ??
+            (init as (RequestInit & { body?: BodyInit | null }) | undefined)?.body ??
+            null,
+          response,
+          transport: "http",
+          meta: {
+            captureOrigin: "global-fetch",
+            source: settings.sourceProcess,
+          },
+        });
+      }
+      return response;
+    } catch (error) {
+      // lyc: 如果请求发生了错误, 则记录错误事件(capture_events表)
+      if (url && /^https?:/i.test(url)) {
+        const store = getDebugProxyCaptureStore(settings.dbPath, settings.blobDir);
+        const parsed = new URL(url);
+        store.recordEvent({
+          sessionId: settings.sessionId,
+          ts: Date.now(),
+          sourceScope: "openclaw",
+          sourceProcess: settings.sourceProcess,
+          protocol: protocolFromUrl(url),
+          direction: "local",
+          kind: "error",
+          flowId: randomUUID(),
+          method:
+            (typeof Request !== "undefined" && input instanceof Request
+              ? input.method
+              : undefined) ??
+            init?.method ??
+            "GET",
+          host: parsed.host,
+          path: `${parsed.pathname}${parsed.search}`,
+          errorText: error instanceof Error ? error.message : String(error),
+          metaJson: safeJsonString({ captureOrigin: "global-fetch" }),
+        });
+      }
+      throw error;
+    }
+  }) as typeof globalThis.fetch;
+  patched[DEBUG_PROXY_FETCH_PATCH_KEY] = { originalFetch, patchedFetch };
+  globalThis.fetch = patchedFetch;
+}
+
+// lyc: 卸载全局Fetch函数的调试代理补丁
+function uninstallDebugProxyGlobalFetchPatch(): void {
+  const patched = globalThis as GlobalFetchPatchTarget;
+  const state = patched[DEBUG_PROXY_FETCH_PATCH_KEY];
+  if (!state) {
+    return;
+  }
+  if (globalThis.fetch === state.patchedFetch) {
+    globalThis.fetch = state.originalFetch;
+  }
+  delete patched[DEBUG_PROXY_FETCH_PATCH_KEY];
+}
+
+export function isDebugProxyGlobalFetchPatchInstalled(): boolean {
+  const state = (globalThis as GlobalFetchPatchTarget)[DEBUG_PROXY_FETCH_PATCH_KEY];
+  return Boolean(state && globalThis.fetch === state.patchedFetch);
+}
+/* lyc: 初始化调试代理捕获, 用于记录http交流信息, 记录在调试代理捕获存储(DebugProxyCaptureStore)中
+具体流程：
+记录会话信息：DebugProxyCaptureStore.upsertSession: 插入 或 更新 会话记录(capture_sessions表)
+安装 调试代理补丁: installDebugProxyGlobalFetchPatch 将为全局Fetch函数安装调 试代理的补丁, 
+    这个调试代理补丁会在每次调用全局Fetch函数时, 使用 DebugProxyCaptureStore中的方法 记录http交流信息，内容如下:
+        persistPayload: 记录请求和响应信息到blobDir目录下, 
+        recordEvent: 记录请求和响应事件和期间发生的异常(capture_events表)，记录内容会关联到blobDir目录下的文件
+当调用全局Fetch函数时实际调用的是 调试代理补丁 函数
+当openclaw进程退出时, 由finalizeDebugProxyCapture 函数处理 进行关闭操作：
+    更新会话记录(capture_sessions表)为结束，即设置endedAt为当前时间
+    卸载全局Fetch函数的 调试代理补丁 并 还原原始fetch函数引用
+    关闭调试代理捕获存储(DebugProxyCaptureStore)
+*/
+export function initializeDebugProxyCapture(mode: string, resolved?: DebugProxySettings): void {
+  // lyc: 解析调试代理设置
+  const settings = resolved ?? resolveDebugProxySettings();
+  if (!settings.enabled) {
+    return;
+  }
+  // lyc: 初始化调试代理捕获存储(DebugProxyCaptureStore)并插入或更新会话记录(capture_sessions表)
+  getDebugProxyCaptureStore(settings.dbPath, settings.blobDir).upsertSession({
+    id: settings.sessionId,
+    startedAt: Date.now(),
+    mode,
+    sourceScope: "openclaw",
+    sourceProcess: settings.sourceProcess,
+    proxyUrl: settings.proxyUrl,
+    dbPath: settings.dbPath,
+    blobDir: settings.blobDir,
+  });
+  // lyc: 安装调试代理补丁, 用于向数据库(调试代理捕获存储(DebugProxyCaptureStore))记录http交流信息
+  installDebugProxyGlobalFetchPatch(settings);
+}
+
+// lyc: 结束调试代理捕获
+export function finalizeDebugProxyCapture(resolved?: DebugProxySettings): void {
+  const settings = resolved ?? resolveDebugProxySettings();
+  if (!settings.enabled) {
+    return;
+  }
+  // lyc: 结束会话记录(capture_sessions表)
+  getDebugProxyCaptureStore(settings.dbPath, settings.blobDir).endSession(settings.sessionId);
+  // lyc: 卸载全局Fetch函数的调试代理补丁
+  uninstallDebugProxyGlobalFetchPatch();
+  // lyc: 关闭调试代理捕获存储(DebugProxyCaptureStore)
+  closeDebugProxyCaptureStore();
+}
+
+// lyc: 记录http交流信息, 
+// lyc: 记录请求和响应信息：将请求体和响应体存入blobDir目录下, 并记录请求和响应事件(capture_events表)中
+export function captureHttpExchange(params: {
+  url: string;
+  method: string;
+  requestHeaders?: Headers | Record<string, string> | undefined;
+  requestBody?: BodyInit | Buffer | string | null;
+  response: Response;
+  transport?: "http" | "sse";
+  flowId?: string;
+  meta?: Record<string, unknown>;
+}): void {
+  // lyc: 解析调试代理设置
+  const settings = resolveDebugProxySettings();
+  if (!settings.enabled) {
+    return;
+  }
+  // lyc: 获取调试代理捕获存储(DebugProxyCaptureStore)
+  const store = getDebugProxyCaptureStore(settings.dbPath, settings.blobDir);
+  const flowId = params.flowId ?? randomUUID();
+  const url = new URL(params.url);
+  const requestBody =
+    typeof params.requestBody === "string" || Buffer.isBuffer(params.requestBody)
+      ? params.requestBody
+      : null;
+  // lyc: 持久化请求体, 并返回持久化后的记录
+  const requestPayload = persistEventPayload(store, {
+    data: requestBody,
+    contentType:
+      params.requestHeaders instanceof Headers
+        ? (params.requestHeaders.get("content-type") ?? undefined)
+        : params.requestHeaders?.["content-type"],
+  });
+  // lyc: 记录请求事件(capture_events表)
+  store.recordEvent({
+    ...createHttpCaptureEventBase({
+      settings,
+      rawUrl: params.url,
+      url,
+      transport: params.transport,
+      direction: "outbound",
+      kind: "request",
+      flowId,
+      method: params.method,
+    }),
+    contentType:
+      params.requestHeaders instanceof Headers
+        ? (params.requestHeaders.get("content-type") ?? undefined)
+        : params.requestHeaders?.["content-type"],
+    headersJson: safeJsonString(redactedCaptureHeaders(params.requestHeaders)),
+    metaJson: safeJsonString(params.meta),
+    ...requestPayload,
+  });
+  // lyc: 检查是否可以克隆响应体
+  const cloneable =
+    params.response &&
+    typeof params.response.clone === "function" &&
+    typeof params.response.arrayBuffer === "function";
+  // lyc: 如果不能克隆响应体, 则记录响应事件(capture_events表)不存储响应体, 之后退出本函数
+  if (!cloneable) {
+    // lyc: 记录响应事件(capture_events表)
+    store.recordEvent({
+      ...createHttpCaptureEventBase({
+        settings,
+        rawUrl: params.url,
+        url,
+        transport: params.transport,
+        direction: "inbound",
+        kind: "response",
+        flowId,
+        method: params.method,
+      }),
+      status: params.response.status,
+      contentType:
+        typeof params.response.headers?.get === "function"
+          ? (params.response.headers.get("content-type") ?? undefined)
+          : undefined,
+      headersJson:
+        params.response.headers && typeof params.response.headers.entries === "function"
+          ? safeJsonString(redactedCaptureHeaders(params.response.headers))
+          : undefined,
+      metaJson: safeJsonString({ ...params.meta, bodyCapture: "unavailable" }),
+    });
+    return;
+  }
+  // lyc: 如果可以克隆响应体, 则记录响应事件(capture_events表)并存储响应体
+  void params.response
+    .clone()
+    .arrayBuffer()
+    .then((buffer) => {
+      // lyc: 持久化响应体, 并返回持久化后的记录
+      const responsePayload = persistEventPayload(store, {
+        data: Buffer.from(buffer),
+        contentType: params.response.headers.get("content-type") ?? undefined,
+      });
+      // lyc: 记录响应事件(capture_events表)
+      store.recordEvent({
+        ...createHttpCaptureEventBase({
+          settings,
+          rawUrl: params.url,
+          url,
+          transport: params.transport,
+          direction: "inbound",
+          kind: "response",
+          flowId,
+          method: params.method,
+        }),
+        status: params.response.status,
+        contentType: params.response.headers.get("content-type") ?? undefined,
+        headersJson: safeJsonString(redactedCaptureHeaders(params.response.headers)),
+        metaJson: safeJsonString(params.meta),
+        ...responsePayload,
+      });
+    })
+    .catch((error) => {
+      // lyc: 如果克隆响应体失败, 则记录错误事件(capture_events表)
+      store.recordEvent({
+        ...createHttpCaptureEventBase({
+          settings,
+          rawUrl: params.url,
+          url,
+          transport: params.transport,
+          direction: "local",
+          kind: "error",
+          flowId,
+          method: params.method,
+        }),
+        errorText: error instanceof Error ? error.message : String(error),
+      });
+    });
+}
+
+export function captureWsEvent(params: {
+  url: string;
+  direction: "outbound" | "inbound" | "local";
+  kind: "ws-open" | "ws-frame" | "ws-close" | "error";
+  flowId: string;
+  payload?: string | Buffer;
+  closeCode?: number;
+  errorText?: string;
+  meta?: Record<string, unknown>;
+}): void {
+  const settings = resolveDebugProxySettings();
+  if (!settings.enabled) {
+    return;
+  }
+  const store = getDebugProxyCaptureStore(settings.dbPath, settings.blobDir);
+  const url = new URL(params.url);
+  const payload = persistEventPayload(store, {
+    data: params.payload,
+    contentType: "application/json",
+  });
+  store.recordEvent({
+    sessionId: settings.sessionId,
+    ts: Date.now(),
+    sourceScope: "openclaw",
+    sourceProcess: settings.sourceProcess,
+    protocol: protocolFromUrl(params.url),
+    direction: params.direction,
+    kind: params.kind,
+    flowId: params.flowId,
+    host: url.host,
+    path: `${url.pathname}${url.search}`,
+    closeCode: params.closeCode,
+    errorText: params.errorText,
+    metaJson: safeJsonString(params.meta),
+    ...payload,
+  });
+}

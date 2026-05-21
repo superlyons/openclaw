@@ -1,3 +1,6 @@
+/* lyc:ai
+
+*/
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -50,9 +53,12 @@ export type CrestodianLocalRuntimePlannerDeps = {
   removeTempDir?: (dir: string) => Promise<void>;
 };
 
+// lyc:aic v2026.5 新增：CrestodianPlannerDeps 类型别名，把两个 deps 类型合一
 export type CrestodianPlannerDeps = CrestodianConfiguredModelPlannerDeps &
   CrestodianLocalRuntimePlannerDeps;
 
+/* lyc:ai
+*/
 export async function planCrestodianCommand(params: {
   input: string;
   overview: CrestodianOverview;

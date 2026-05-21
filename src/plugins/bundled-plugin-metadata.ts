@@ -21,12 +21,15 @@ import {
 } from "./manifest.js";
 import { resolveLoaderPackageRoot } from "./sdk-alias.js";
 
+// lyc: 解析加载器模块的 根package.json 所在的目录, 从modulePath, argv1, cwd, moduleUrl 中获取
+// lyc: 如果无法解析, 则返回当前模块的目录
 const OPENCLAW_PACKAGE_ROOT =
   resolveLoaderPackageRoot({
     modulePath: fileURLToPath(import.meta.url),
     moduleUrl: import.meta.url,
   }) ?? fileURLToPath(new URL("../..", import.meta.url));
 const CURRENT_MODULE_PATH = fileURLToPath(import.meta.url);
+// lyc: 从已构建工件中运行: 当前文件是否在 dist 或 dist-runtime 目录下则代表从已构建工件中运行
 const RUNNING_FROM_BUILT_ARTIFACT =
   CURRENT_MODULE_PATH.includes(`${path.sep}dist${path.sep}`) ||
   CURRENT_MODULE_PATH.includes(`${path.sep}dist-runtime${path.sep}`);
@@ -50,11 +53,16 @@ export type BundledPluginMetadata = {
   manifest: PluginManifest;
 };
 
+// lyc:aic v2026.5：删除了 bundledPluginMetadataCache (Map) 及 clearBundledPluginMetadataCache 函数——
+//                  upstream 把缓存策略改到调用方层面（避免全局状态）
+// lyc: 读取插件的 package.json 文件, 并解析为 PackageManifest 实例对象
 function readPackageManifest(pluginDir: string): PackageManifest | undefined {
   const packagePath = path.join(pluginDir, "package.json");
   return tryReadJsonSync<PackageManifest>(packagePath) ?? undefined;
 }
 
+// lyc: 解析捆绑插件元数据扫描目录, 如果提供了scanDir, 则返回该目录, 否则返回捆绑插件的扫描目录
+// lyc: packageRoot 目录下的 extensions | dist-runtime/extensions | dist/extensions | undefined 目录
 function resolveBundledPluginMetadataScanDir(
   packageRoot: string,
   scanDir?: string,
@@ -75,26 +83,33 @@ function resolveBundledPluginLookupParams(params: { rootDir: string; scanDir?: s
   return params.scanDir ? params : { rootDir: params.rootDir };
 }
 
+// lyc: 收集捆绑插件元数据
 function collectBundledPluginMetadata(
   resolvedScanDir: string | undefined,
   includeChannelConfigs: boolean,
   includeSyntheticChannelConfigs: boolean,
 ): readonly BundledPluginMetadata[] {
+  // lyc:aic v2026.5：把"扫描目录解析 + 不存在检查"的责任上移到了调用方（参数直接传 resolvedScanDir），
+  //                  本函数只负责"扫描已知目录"
+  // lyc: 如果扫描目录不存在, 则返回空数组
   if (!resolvedScanDir || !fs.existsSync(resolvedScanDir)) {
     return [];
   }
 
   const entries: BundledPluginMetadata[] = [];
+  // lyc: 遍历扫描目录下的所有子目录, 并收集插件元数据
   for (const dirName of fs
     .readdirSync(resolvedScanDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .toSorted((left, right) => left.localeCompare(right))) {
     const pluginDir = path.join(resolvedScanDir, dirName);
+    // lyc: 加载插件元数据 rootDir/openclaw.plugin.json 文件的实例对象
     const manifestResult = loadPluginManifest(pluginDir, false);
     if (!manifestResult.ok) {
       continue;
     }
+    // lyc: 读取插件的 rootDir/package.json 文件, 并解析为 OpenClawPackageManifest 实例对象
 
     const packageJson = readPackageManifest(pluginDir);
     const packageManifest = getPackageManifestMetadata(packageJson);
@@ -166,6 +181,7 @@ function collectBundledPluginMetadata(
 
   return entries;
 }
+// lyc: 列出捆绑插件元数据
 
 export function listBundledPluginMetadata(params?: {
   rootDir?: string;
@@ -173,10 +189,14 @@ export function listBundledPluginMetadata(params?: {
   includeChannelConfigs?: boolean;
   includeSyntheticChannelConfigs?: boolean;
 }): readonly BundledPluginMetadata[] {
+  // lyc: 根package.json 所在的目录
   const rootDir = path.resolve(params?.rootDir ?? OPENCLAW_PACKAGE_ROOT);
   const scanDir = params?.scanDir ? path.resolve(params.scanDir) : undefined;
+  // lyc: 解析捆绑插件元数据扫描目录（v2026.5 把这一步从 collectBundledPluginMetadata 内部挪到了调用方）
   const resolvedScanDir = resolveBundledPluginMetadataScanDir(rootDir, scanDir);
+  // lyc: !RUNNING_FROM_BUILT_ARTIFACT: 如果是在已构建的代码中运行, 则不包含通道配置
   const includeChannelConfigs = params?.includeChannelConfigs ?? !RUNNING_FROM_BUILT_ARTIFACT;
+  // lyc: includeSyntheticChannelConfigs: 是否包含合成通道配置
   const includeSyntheticChannelConfigs =
     params?.includeSyntheticChannelConfigs ?? includeChannelConfigs;
   const metadata = Object.freeze(
